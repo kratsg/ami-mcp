@@ -9,7 +9,7 @@ icon: lucide/settings
 | Variable             | Required    | Description                                                                   |
 | -------------------- | ----------- | ----------------------------------------------------------------------------- |
 | `X509_USER_PROXY`    | Recommended | Path to your VOMS proxy certificate (auto-detected from `/tmp/x509up_u<uid>`) |
-| `X509_CERT_DIR`      | Recommended | Directory of CA certificates for SSL verification                             |
+| `X509_CERT_DIR`      | Recommended | Directory of CA certificates for SSL verification. **Set automatically** when installed via pixi/conda-forge (`ca-policy-lcg` package). Must be set manually otherwise. |
 | `AMI_ENDPOINT`       | No          | AMI server endpoint (default: `atlas-replica`)                                |
 | `ATLAS_PMGXSEC_PATH` | No          | Path to PMGxsecDB text files (default: CVMFS PMGTools directory)              |
 
@@ -31,10 +31,31 @@ Check validity:
 voms-proxy-info --all
 ```
 
+### CA certificates
+
+When installed via **pixi or conda-forge**, the `ca-policy-lcg` package is
+included as a dependency and automatically sets `X509_CERT_DIR` to the
+certificates bundled in the conda environment
+(`${CONDA_PREFIX}/etc/grid-security/certificates/`). No manual configuration
+needed.
+
+When installed via **pip** (without conda), you must set `X509_CERT_DIR`
+yourself:
+
+- On CVMFS-based facilities (UChicago AF, CERN lxplus, etc.):
+
+  ```bash
+  export X509_CERT_DIR=/cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase/etc/grid-security-emi/certificates
+  ```
+
+- From a local `ca-policy-lcg` installation or system grid CA bundle, point to
+  the directory containing the `.pem` / `.r0` files.
+
 ### On CVMFS-based facilities (UChicago AF, CERN lxplus, etc.)
 
 ```bash
 voms-proxy-init -voms atlas
+# X509_CERT_DIR is set automatically if using pixi; otherwise:
 export X509_CERT_DIR=/cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase/etc/grid-security-emi/certificates
 export ATLAS_PMGXSEC_PATH=/cvmfs/atlas.cern.ch/repo/sw/database/GroupData/dev/PMGTools
 ```
@@ -58,6 +79,9 @@ connectivity).
 [ami-mcp] WARNING: X509_CERT_DIR is not set.
     SSL certificate verification may fail when contacting the AMI server.
 ```
+
+This warning will not appear when `ami-mcp` is installed via pixi or
+conda-forge, because `ca-policy-lcg` sets `X509_CERT_DIR` automatically.
 
 ## AMI endpoint
 

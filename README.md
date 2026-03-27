@@ -75,11 +75,15 @@ pixi add ami-mcp
 voms-proxy-init -voms atlas
 ```
 
-**On CVMFS-based facilities (e.g. UChicago Analysis Facility, CERN lxplus):**
+**When installed via pip** (not pixi/conda-forge), also set `X509_CERT_DIR`.
+On CVMFS-based facilities (e.g. UChicago Analysis Facility, CERN lxplus):
 
 ```bash
 export X509_CERT_DIR=/cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase/etc/grid-security-emi/certificates
 ```
+
+When installed via **pixi or conda-forge**, `ca-policy-lcg` is included and
+sets `X509_CERT_DIR` automatically — no extra step needed.
 
 ### 2. Test the server
 
@@ -91,7 +95,24 @@ The server speaks MCP over stdio. Configure your MCP client to launch it.
 
 ### 3. Configure Claude Code
 
-Add to your `.mcp.json` (project) or `~/.claude.json` (global):
+**With pixi** (recommended — `X509_CERT_DIR` is set automatically):
+
+```json
+{
+  "mcpServers": {
+    "ami": {
+      "type": "stdio",
+      "command": "pixi",
+      "args": ["run", "ami-mcp", "serve"],
+      "env": {
+        "ATLAS_PMGXSEC_PATH": "/cvmfs/atlas.cern.ch/repo/sw/database/GroupData/dev/PMGTools"
+      }
+    }
+  }
+}
+```
+
+**With pip** (must set `X509_CERT_DIR` manually):
 
 ```json
 {

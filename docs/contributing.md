@@ -149,12 +149,18 @@ class TestAmiMyTool:
 
    ```bash
    voms-proxy-init -voms atlas
+   # X509_CERT_DIR is set automatically when using pixi (ca-policy-lcg); otherwise:
    export X509_CERT_DIR=/cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase/etc/grid-security-emi/certificates
    ```
 
 2. Start the server:
 
    ```bash
+   # With pixi (X509_CERT_DIR set automatically):
+   ATLAS_PMGXSEC_PATH=/cvmfs/atlas.cern.ch/repo/sw/database/GroupData/dev/PMGTools \
+       pixi run ami-mcp serve
+
+   # With pip (set X509_CERT_DIR manually):
    env X509_CERT_DIR=/cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase/etc/grid-security-emi/certificates \
        ATLAS_PMGXSEC_PATH=/cvmfs/atlas.cern.ch/repo/sw/database/GroupData/dev/PMGTools \
        ami-mcp serve

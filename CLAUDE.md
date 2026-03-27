@@ -272,6 +272,16 @@ Files at `ATLAS_PMGXSEC_PATH` (default:
 
 3. Start the server:
 
+   With pixi (`X509_CERT_DIR` is set automatically by `ca-policy-lcg`):
+
+   ```bash
+   env X509_USER_PROXY=/tmp/x509up_u$(id -u) \
+       ATLAS_PMGXSEC_PATH=/cvmfs/atlas.cern.ch/repo/sw/database/GroupData/dev/PMGTools \
+       pixi run ami-mcp serve
+   ```
+
+   With pip (must set `X509_CERT_DIR` manually):
+
    ```bash
    env X509_USER_PROXY=/tmp/x509up_u$(id -u) \
        X509_CERT_DIR=/cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase/etc/grid-security-emi/certificates \
@@ -280,6 +290,25 @@ Files at `ATLAS_PMGXSEC_PATH` (default:
    ```
 
 4. Example Claude Code MCP config (`.mcp.json`):
+
+   With pixi:
+
+   ```json
+   {
+     "mcpServers": {
+       "ami": {
+         "type": "stdio",
+         "command": "pixi",
+         "args": ["run", "ami-mcp", "serve"],
+         "env": {
+           "ATLAS_PMGXSEC_PATH": "/cvmfs/atlas.cern.ch/repo/sw/database/GroupData/dev/PMGTools"
+         }
+       }
+     }
+   }
+   ```
+
+   With pip:
 
    ```json
    {
