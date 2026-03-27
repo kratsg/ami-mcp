@@ -21,7 +21,7 @@ class TestResources:
         mcp = FastMCP("test")
         register(mcp)
         resources = {str(r.uri): r for r in mcp._resource_manager.list_resources()}
-        fn = resources["ami://query-language"].fn
+        fn = resources["ami://query-language"].fn  # type: ignore[attr-defined]
         content = fn()
         assert "SearchQuery" in content
 
@@ -29,7 +29,7 @@ class TestResources:
         mcp = FastMCP("test")
         register(mcp)
         resources = {str(r.uri): r for r in mcp._resource_manager.list_resources()}
-        fn = resources["ami://atlas-nomenclature"].fn
+        fn = resources["ami://atlas-nomenclature"].fn  # type: ignore[attr-defined]
         content = fn()
         assert "PMGL1" in content
         assert "PMGL3" in content
@@ -38,7 +38,7 @@ class TestResources:
         mcp = FastMCP("test")
         register(mcp)
         resources = {str(r.uri): r for r in mcp._resource_manager.list_resources()}
-        fn = resources["ami://pmg-xsec-database"].fn
+        fn = resources["ami://pmg-xsec-database"].fn  # type: ignore[attr-defined]
         content = fn()
         assert "crossSection_pb" in content
         assert "genFiltEff" in content

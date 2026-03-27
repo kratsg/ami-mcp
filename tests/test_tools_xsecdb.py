@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
@@ -13,6 +12,7 @@ from ami_mcp.tools.xsecdb import _parse_db_file, register
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+    from pathlib import Path
 
 # A minimal PMGxsecDB file for testing
 _MC16_HEADER = "dataset_number/I:physics_short/C:crossSection_pb/D:genFiltEff/D:kFactor/D:relUncertUP/D:relUncertDOWN/D:generator_name/C:etag/C"
@@ -46,7 +46,7 @@ def xsec_dir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def registered_tools(xsec_dir: Path) -> dict[str, Callable[..., Awaitable[str]]]:
+def registered_tools(_xsec_dir: Path) -> dict[str, Callable[..., Awaitable[str]]]:
     mcp = FastMCP("test")
     register(mcp)
     return {tool.name: tool.fn for tool in mcp._tool_manager.list_tools()}
@@ -138,7 +138,9 @@ class TestAmiLookupXsec:
     ) -> None:
         with patch("ami_mcp.tools.xsecdb._get_xsec_path", return_value=xsec_dir):
             fn = registered_tools["ami_lookup_xsec"]
-            result = await fn(dsid=700320, database="PMGxsecDB_mc16.txt", etag="e8351", ctx=mock_ctx)
+            result = await fn(
+                dsid=700320, database="PMGxsecDB_mc16.txt", etag="e8351", ctx=mock_ctx
+            )
 
         assert "1234.5" in result
 

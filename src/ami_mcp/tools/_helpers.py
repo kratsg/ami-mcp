@@ -31,8 +31,7 @@ def format_ami_result(rows: list[Any], max_rows: int = 100) -> str:
         keys = list(display[0].keys())
         header = " | ".join(keys)
         lines = [header, "-" * len(header)]
-        for row in display:
-            lines.append(" | ".join(str(row.get(k, "")) for k in keys))
+        lines.extend(" | ".join(str(row.get(k, "")) for k in keys) for row in display)
     else:
         lines = [str(r) for r in display]
 
@@ -84,5 +83,5 @@ def scope_to_catalog(scope: str) -> str:
     if scope in _SCOPE_TO_CATALOG:
         return _SCOPE_TO_CATALOG[scope]
     # Best-effort fallback: take the mc-prefix and assume _001:production
-    short = scope.split("_")[0]
+    short = scope.split("_", maxsplit=1)[0]
     return f"{short}_001:production"

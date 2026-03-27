@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP  # noqa: TC002
 
-from ami_mcp.nomenclature import AMI_QUERY_LANGUAGE, ATLAS_NOMENCLATURE, PMG_XSEC_DATABASE
+from ami_mcp.nomenclature import (
+    AMI_QUERY_LANGUAGE,
+    ATLAS_NOMENCLATURE,
+    PMG_XSEC_DATABASE,
+)
 
 
 def register(mcp: FastMCP) -> None:

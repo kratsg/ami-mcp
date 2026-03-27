@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import Context, FastMCP
+if TYPE_CHECKING:
+    from mcp.server.fastmcp import Context, FastMCP
 
 from ami_mcp.tools._helpers import run_ami_sync
 
@@ -23,7 +24,7 @@ def register(mcp: FastMCP) -> None:
         Uses GetPhysicsParamsForDataset to retrieve the generator-level physics
         metadata registered in AMI for an ATLAS MC dataset.
 
-        Note: AMI stores crossSection in nb. This tool converts to pb (×1000)
+        Note: AMI stores crossSection in nb. This tool converts to pb (x1000)
         for display alongside the raw value.
 
         Args:
@@ -46,9 +47,7 @@ def register(mcp: FastMCP) -> None:
                         try:
                             xs_nb = float(value)
                             xs_pb = xs_nb * 1000.0
-                            lines.append(
-                                f"crossSection: {value} nb  ({xs_pb:.6g} pb)"
-                            )
+                            lines.append(f"crossSection: {value} nb  ({xs_pb:.6g} pb)")
                         except (ValueError, TypeError):
                             lines.append(f"crossSection: {value}")
                     elif value is not None and value != "":

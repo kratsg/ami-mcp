@@ -8,12 +8,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import pyAMI.client
+import pyAMI_atlas.api as _atlas_api  # noqa: F401 (side-effect: registers ATLAS endpoints)
+from mcp.server.fastmcp import FastMCP
+
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-from mcp.server.fastmcp import FastMCP
-
-from ami_mcp.nomenclature import ATLAS_NOMENCLATURE, AMI_QUERY_LANGUAGE
+from ami_mcp.nomenclature import AMI_QUERY_LANGUAGE, ATLAS_NOMENCLATURE
 from ami_mcp.resources import register as register_resources
 from ami_mcp.tools import datasets, execute, hashtags, physics, tags, validate, xsecdb
 
@@ -49,7 +51,7 @@ def _preflight_check() -> None:
             )
     else:
         uid = os.getuid() if hasattr(os, "getuid") else 0
-        default_proxy = Path(f"/tmp/x509up_u{uid}")  # noqa: S108
+        default_proxy = Path(f"/tmp/x509up_u{uid}")
         if not default_proxy.exists():
             warnings.append(
                 "No VOMS proxy found. AMI requires a valid grid proxy.\n"
@@ -86,9 +88,6 @@ def _make_mcp() -> FastMCP:
         The client reads the VOMS proxy from X509_USER_PROXY or the default
         /tmp/x509up_u<uid> path. Set X509_CERT_DIR for SSL cert verification.
         """
-        import pyAMI.client
-        import pyAMI_atlas.api as _atlas_api  # noqa: F401 (side-effect: registers ATLAS endpoints)
-
         endpoint = os.environ.get("AMI_ENDPOINT", "atlas-replica")
         client = pyAMI.client.Client(endpoint)
         yield {"ami_client": client}

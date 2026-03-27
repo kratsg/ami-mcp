@@ -11,7 +11,6 @@ from mcp.server.fastmcp import FastMCP
 
 from ami_mcp.tools.hashtags import register
 
-
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
@@ -28,24 +27,34 @@ class TestAmiSearchByHashtags:
         self,
         registered_tools: dict[str, Callable[..., Awaitable[str]]],
         mock_ctx: MagicMock,
-        mock_ami_client: MagicMock,
     ) -> None:
         result_mock = MagicMock()
         result_mock.get_rows.return_value = [
-            OrderedDict([("logicalDatasetName", "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351")])
+            OrderedDict(
+                [
+                    (
+                        "logicalDatasetName",
+                        "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351",
+                    )
+                ]
+            )
         ]
 
         executed_commands: list[str] = []
 
-        async def capture_run_ami_sync(func, *args, **kwargs):  # type: ignore[no-untyped-def]
+        async def capture_run_ami_sync(_func, *args, **_kwargs):
             if args:
                 executed_commands.append(str(args[0]))
             return result_mock
 
         with patch("ami_mcp.tools.hashtags.run_ami_sync", new=capture_run_ami_sync):
             fn = registered_tools["ami_search_by_hashtags"]
-            result = await fn(
-                scope="mc20_13TeV", l1="WeakBoson", l2="Vjets", l3="Baseline", ctx=mock_ctx
+            await fn(
+                scope="mc20_13TeV",
+                l1="WeakBoson",
+                l2="Vjets",
+                l3="Baseline",
+                ctx=mock_ctx,
             )
 
         assert len(executed_commands) == 1
@@ -63,7 +72,14 @@ class TestAmiSearchByHashtags:
     ) -> None:
         result_mock = MagicMock()
         result_mock.get_rows.return_value = [
-            OrderedDict([("logicalDatasetName", "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351")])
+            OrderedDict(
+                [
+                    (
+                        "logicalDatasetName",
+                        "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351",
+                    )
+                ]
+            )
         ]
         with patch(
             "ami_mcp.tools.hashtags.run_ami_sync",
@@ -107,7 +123,9 @@ class TestAmiGetDatasetHashtags:
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_get_dataset_hashtags"]
-            result = await fn(dataset="mc20_13TeV.700320.Sh.evgen.EVNT.e8351", ctx=mock_ctx)
+            result = await fn(
+                dataset="mc20_13TeV.700320.Sh.evgen.EVNT.e8351", ctx=mock_ctx
+            )
 
         assert "WeakBoson" in result
         assert "Baseline" in result

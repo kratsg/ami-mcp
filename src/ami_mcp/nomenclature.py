@@ -71,7 +71,7 @@ given dataset.
 MC CAMPAIGNS AND CATALOG MAPPING
 ═══════════════════════════════════════════════════════════════
 Scope (Rucio)    Catalog (AMI evgen)         Description
-mc16_13TeV       mc15_001:production         Run 2 (2015–2018)
+mc16_13TeV       mc15_001:production         Run 2 (2015-2018)
 mc20_13TeV       mc15_001:production         Run 2 reprocessing
 mc21_13p6TeV     mc21_001:production         Run 3 pilot
 mc23_13p6TeV     mc23_001:production         Run 3
@@ -80,8 +80,8 @@ Note: mc16 and mc20 evgen datasets live in the mc15 AMI catalog because they
 were generated with mc15-era job options.
 
 Standard physics metadata fields on EVNT datasets:
-  crossSection    generator-level cross-section (in nb in AMI; convert ×1000 for pb)
-  genFiltEff      generator filter efficiency (0–1)
+  crossSection    generator-level cross-section (in nb in AMI; convert x1000 for pb)
+  genFiltEff      generator filter efficiency (0-1)
   kFactor         k-factor for NLO/NNLO corrections (typically 1.0 if unknown)
 
 These are accessed via GetPhysicsParamsForDataset or the PMG cross-section DB.
@@ -223,7 +223,7 @@ Columns (newer mc16/mc21/mc23 files):
   dataset_number/I    DSID (integer)
   physics_short/C     process description (physicsShort)
   crossSection_pb/D   cross-section in picobarn (pb)
-  genFiltEff/D        generator filter efficiency (0.0–1.0)
+  genFiltEff/D        generator filter efficiency (0.0-1.0)
   kFactor/D           k-factor for NLO/NNLO corrections
   relUncertUP/D       relative uncertainty up (fraction, e.g. 0.05 = 5%)
   relUncertDOWN/D     relative uncertainty down (fraction)
@@ -232,7 +232,7 @@ Columns (newer mc16/mc21/mc23 files):
 
 Note on units:
   Newer files (mc16, mc21, mc23): crossSection_pb column is already in pb.
-  Older files (mc15): column is named crossSection and is in nb (×1000 = pb).
+  Older files (mc15): column is named crossSection and is in nb (x1000 = pb).
 
 Multiple rows per DSID:
   A DSID may appear multiple times with different etags (different generator

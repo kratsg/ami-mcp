@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import patch
 
 from ami_mcp.server import _preflight_check
 
 
 class TestPreflightCheck:
-    def test_warns_when_no_proxy_and_no_default(self, capsys, tmp_path) -> None:
+    def test_warns_when_no_proxy_and_no_default(self, capsys) -> None:
         """Warn when no proxy is configured and default path doesn't exist."""
         with patch.dict("os.environ", {}, clear=True):
             _preflight_check()

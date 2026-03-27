@@ -6,15 +6,15 @@ Run with: pytest tests/integration/ --runslow -v
 
 from __future__ import annotations
 
+import pyAMI.client
+import pyAMI_atlas.api  # noqa: F401
 import pytest
+from pyAMI_atlas import api
 
 
 @pytest.mark.slow
 def test_ami_execute_searchquery() -> None:
     """ami_execute with a simple SearchQuery returns results."""
-    import pyAMI.client
-    import pyAMI_atlas.api  # noqa: F401
-
     client = pyAMI.client.Client("atlas-replica")
     cmd = (
         'SearchQuery -catalog="mc23_001:production" -entity="HASHTAGS"'
@@ -30,9 +30,6 @@ def test_ami_execute_searchquery() -> None:
 @pytest.mark.slow
 def test_ami_get_dataset_info_known_dataset() -> None:
     """ami_get_dataset_info returns metadata for a known EVNT dataset."""
-    import pyAMI.client
-    import pyAMI_atlas.api as api
-
     client = pyAMI.client.Client("atlas-replica")
     # mc20 Zee sample — should be stable
     ldn = "mc20_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.evgen.EVNT.e8351"
@@ -45,9 +42,6 @@ def test_ami_get_dataset_info_known_dataset() -> None:
 @pytest.mark.slow
 def test_ami_search_by_hashtags_weakboson() -> None:
     """Searching for WeakBoson/Vjets/Baseline in mc20 returns datasets."""
-    import pyAMI.client
-    import pyAMI_atlas.api  # noqa: F401
-
     client = pyAMI.client.Client("atlas-replica")
     cmd = (
         "DatasetWBListDatasetsForHashtag"
@@ -62,9 +56,6 @@ def test_ami_search_by_hashtags_weakboson() -> None:
 @pytest.mark.slow
 def test_ami_get_physics_params_known_dataset() -> None:
     """GetPhysicsParamsForDataset returns crossSection for a known dataset."""
-    import pyAMI.client
-    import pyAMI_atlas.api  # noqa: F401
-
     client = pyAMI.client.Client("atlas-replica")
     ldn = "mc20_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.evgen.EVNT.e8351"
     cmd = f'GetPhysicsParamsForDataset -logicalDatasetName="{ldn}"'

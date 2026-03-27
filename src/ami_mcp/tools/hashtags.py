@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import Context, FastMCP
+if TYPE_CHECKING:
+    from mcp.server.fastmcp import Context, FastMCP
 
 from ami_mcp.tools._helpers import format_ami_result, run_ami_sync
 
@@ -74,7 +75,7 @@ def register(mcp: FastMCP) -> None:
     ) -> str:
         """Get the PMG hashtag classification for a given ATLAS dataset.
 
-        Reverse-looks up the PMGL1–PMGL4 hashtags assigned to a dataset in
+        Reverse-looks up the PMGL1-PMGL4 hashtags assigned to a dataset in
         the AMI DatasetWorkbook. Typically used with an EVNT LDN.
 
         Args:

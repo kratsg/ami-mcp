@@ -29,11 +29,13 @@ class TestAmiGetAmiTag:
         mock_ctx: MagicMock,
     ) -> None:
         rows = [
-            OrderedDict([
-                ("tagType", "e"),
-                ("tagNumber", "8351"),
-                ("description", "Sherpa 2.2.11 Zee"),
-            ])
+            OrderedDict(
+                [
+                    ("tagType", "e"),
+                    ("tagNumber", "8351"),
+                    ("description", "Sherpa 2.2.11 Zee"),
+                ]
+            )
         ]
         result_mock = MagicMock()
         result_mock.get_rows.return_value = rows

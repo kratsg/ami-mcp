@@ -35,7 +35,10 @@ class TestAmiExecute:
         ]
         mock_ami_client.execute.return_value = result_mock
 
-        with patch("ami_mcp.tools.execute.run_ami_sync", new=AsyncMock(return_value=result_mock)):
+        with patch(
+            "ami_mcp.tools.execute.run_ami_sync",
+            new=AsyncMock(return_value=result_mock),
+        ):
             fn = registered_tools["ami_execute"]
             result = await fn(command='SearchQuery -catalog="mc23"', ctx=mock_ctx)
 
@@ -50,7 +53,10 @@ class TestAmiExecute:
         result_mock = MagicMock()
         result_mock.get_rows.return_value = []
 
-        with patch("ami_mcp.tools.execute.run_ami_sync", new=AsyncMock(return_value=result_mock)):
+        with patch(
+            "ami_mcp.tools.execute.run_ami_sync",
+            new=AsyncMock(return_value=result_mock),
+        ):
             fn = registered_tools["ami_execute"]
             result = await fn(command="SomeQuery", ctx=mock_ctx)
 

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any
+import contextlib
+from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import Context, FastMCP
+if TYPE_CHECKING:
+    from mcp.server.fastmcp import Context, FastMCP
 
 from ami_mcp.tools._helpers import run_ami_sync
 from ami_mcp.tools.xsecdb import _get_xsec_path, _parse_db_file
@@ -23,7 +25,7 @@ def register(mcp: FastMCP) -> None:
         """Validate ATLAS MC samples: check hashtag classification and metadata.
 
         For each dataset LDN provided:
-          1. Looks up PMG hashtag classification (PMGL1–PMGL4) in AMI.
+          1. Looks up PMG hashtag classification (PMGL1-PMGL4) in AMI.
           2. If a cross-section database is specified, compares the AMI physics
              parameters (crossSection, genFiltEff, kFactor) against the PMG
              xsec DB values and flags discrepancies.
@@ -103,10 +105,8 @@ def register(mcp: FastMCP) -> None:
                     parts = ldn.split(".")
                     dsid: int | None = None
                     etag: str | None = None
-                    try:
+                    with contextlib.suppress(ValueError, IndexError):
                         dsid = int(parts[1]) if len(parts) > 1 else None
-                    except (ValueError, IndexError):
-                        pass
                     # Find etag from version tag (last field, starts with 'e')
                     if len(parts) > 5:
                         version_tag = parts[-1]
@@ -131,8 +131,18 @@ def register(mcp: FastMCP) -> None:
                             else:
                                 db_row = db_rows[0]
                                 for ami_key, db_key, unit_factor, label in [
-                                    ("crossSection", "crossSection_pb", 1000.0, "crossSection"),
-                                    ("crossSection", "crossSection", 1.0, "crossSection"),
+                                    (
+                                        "crossSection",
+                                        "crossSection_pb",
+                                        1000.0,
+                                        "crossSection",
+                                    ),
+                                    (
+                                        "crossSection",
+                                        "crossSection",
+                                        1.0,
+                                        "crossSection",
+                                    ),
                                     ("genFiltEff", "genFiltEff", 1.0, "genFiltEff"),
                                     ("kFactor", "kFactor", 1.0, "kFactor"),
                                 ]:
@@ -145,7 +155,9 @@ def register(mcp: FastMCP) -> None:
                                     try:
                                         ami_val = float(ami_val_str) * unit_factor
                                         db_val = float(db_val_str)
-                                        if abs(ami_val - db_val) > 1e-6 * max(abs(db_val), 1.0):
+                                        if abs(ami_val - db_val) > 1e-6 * max(
+                                            abs(db_val), 1.0
+                                        ):
                                             section_lines.append(
                                                 f"  WARNING: AMI {label}={ami_val:.6g}"
                                                 f" != DB {label}={db_val:.6g}"

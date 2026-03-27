@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import Context, FastMCP
+if TYPE_CHECKING:
+    from mcp.server.fastmcp import Context, FastMCP
 
 from ami_mcp.tools._helpers import format_ami_result, run_ami_sync
 

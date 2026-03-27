@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import Context, FastMCP
+if TYPE_CHECKING:
+    from mcp.server.fastmcp import Context, FastMCP
 
-_DEFAULT_PMGXSEC_PATH = (
-    "/cvmfs/atlas.cern.ch/repo/sw/database/GroupData/dev/PMGTools"
-)
+_DEFAULT_PMGXSEC_PATH = "/cvmfs/atlas.cern.ch/repo/sw/database/GroupData/dev/PMGTools"
 
 
 def _get_xsec_path() -> Path:
@@ -27,9 +26,7 @@ def _parse_header(header_line: str) -> list[str]:
     return [col.split("/")[0] for col in header_line.strip().split(":")]
 
 
-def _parse_db_file(
-    db_path: Path, dsid: int, etag: str | None
-) -> list[dict[str, str]]:
+def _parse_db_file(db_path: Path, dsid: int, etag: str | None) -> list[dict[str, str]]:
     """Parse a PMGxsecDB file and return matching rows.
 
     Args:
@@ -61,19 +58,18 @@ def _parse_db_file(
         etag_col = columns.index("etag")
 
     results: list[dict[str, str]] = []
-    for line in lines[1:]:
-        line = line.strip()
-        if not line or line.startswith("#"):
+    for raw_line in lines[1:]:
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
             continue
-        parts = line.split("\t")
+        parts = stripped.split("\t")
         if len(parts) < len(columns):
             # Pad short rows
             parts += [""] * (len(columns) - len(parts))
         if parts[dsid_col] != dsid_str:
             continue
-        if etag is not None and etag_col is not None:
-            if parts[etag_col] != etag:
-                continue
+        if etag is not None and etag_col is not None and parts[etag_col] != etag:
+            continue
         results.append(dict(zip(columns, parts, strict=False)))
 
     return results
