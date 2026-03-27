@@ -6,12 +6,12 @@ icon: lucide/settings
 
 ## Environment variables
 
-| Variable             | Required    | Description                                                                   |
-| -------------------- | ----------- | ----------------------------------------------------------------------------- |
-| `X509_USER_PROXY`    | Recommended | Path to your VOMS proxy certificate (auto-detected from `/tmp/x509up_u<uid>`) |
+| Variable             | Required    | Description                                                                                                                                                             |
+| -------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `X509_USER_PROXY`    | Recommended | Path to your VOMS proxy certificate (auto-detected from `/tmp/x509up_u<uid>`)                                                                                           |
 | `X509_CERT_DIR`      | Recommended | Directory of CA certificates for SSL verification. **Set automatically** when installed via pixi/conda-forge (`ca-policy-lcg` package). Must be set manually otherwise. |
-| `AMI_ENDPOINT`       | No          | AMI server endpoint (default: `atlas-replica`)                                |
-| `ATLAS_PMGXSEC_PATH` | No          | Path to PMGxsecDB text files (default: CVMFS PMGTools directory)              |
+| `AMI_ENDPOINT`       | No          | AMI server endpoint (default: `atlas-replica`)                                                                                                                          |
+| `ATLAS_PMGXSEC_PATH` | No          | Path to PMGxsecDB text files (default: CVMFS PMGTools directory)                                                                                                        |
 
 ## Authentication
 

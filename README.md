@@ -75,15 +75,15 @@ pixi add ami-mcp
 voms-proxy-init -voms atlas
 ```
 
-**When installed via pip** (not pixi/conda-forge), also set `X509_CERT_DIR`.
-On CVMFS-based facilities (e.g. UChicago Analysis Facility, CERN lxplus):
+**When installed via pip** (not pixi/conda-forge), also set `X509_CERT_DIR`. On
+CVMFS-based facilities (e.g. UChicago Analysis Facility, CERN lxplus):
 
 ```bash
 export X509_CERT_DIR=/cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase/etc/grid-security-emi/certificates
 ```
 
-When installed via **pixi or conda-forge**, `ca-policy-lcg` is included and
-sets `X509_CERT_DIR` automatically — no extra step needed.
+When installed via **pixi or conda-forge**, `ca-policy-lcg` is included and sets
+`X509_CERT_DIR` automatically — no extra step needed.
 
 ### 2. Test the server
 
