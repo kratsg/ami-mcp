@@ -74,4 +74,4 @@ class TestAmiExecute:
             fn = registered_tools["ami_execute"]
             result = await fn(command="BadCommand", ctx=mock_ctx)
 
-        assert result.startswith("Error:")
+        assert "Error" in result

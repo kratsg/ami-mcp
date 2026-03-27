@@ -6,7 +6,31 @@ from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP  # noqa: TC002
 
-from ami_mcp.tools._helpers import format_ami_result, run_ami_sync, scope_to_catalog
+from ami_mcp.tools._helpers import (
+    append_next_actions,
+    format_ami_result,
+    format_error,
+    run_ami_sync,
+    scope_to_catalog,
+)
+
+_DATASET_INFO_FIELDS = [
+    "logicalDatasetName",
+    "datasetNumber",
+    "physicsShort",
+    "nFiles",
+    "nEvents",
+    "totalSize",
+    "crossSection",
+    "genFiltEff",
+    "kFactor",
+    "amiStatus",
+    "prodsysStatus",
+    "dataType",
+    "prodStep",
+    "projectName",
+    "version",
+]
 
 
 def register(mcp: FastMCP) -> None:
@@ -20,8 +44,9 @@ def register(mcp: FastMCP) -> None:
     ) -> str:
         """Get metadata for an ATLAS dataset (LDN) from AMI.
 
-        Returns nFiles, nEvents, totalSize, crossSection, genFiltEff, amiStatus,
-        and other fields registered in AMI for this dataset.
+        Returns key fields: nFiles, nEvents, totalSize, crossSection, genFiltEff,
+        amiStatus, and related metadata registered in AMI for this dataset.
+        Use ami_execute with AMIGetDatasetInfo for all raw fields.
 
         Args:
             dataset: Full Logical Dataset Name (LDN), e.g.
@@ -32,9 +57,29 @@ def register(mcp: FastMCP) -> None:
         try:
             result = await run_ami_sync(client.execute, command, format="dom_object")
             rows = result.get_rows()
-            return format_ami_result(rows)
+            if not rows:
+                return "No results."
+            # Filter to curated fields; fall back to all fields if none match
+            row = rows[0]
+            filtered = {k: v for k, v in row.items() if k in _DATASET_INFO_FIELDS}
+            display_rows = [filtered] if filtered else rows
+            output = format_ami_result(display_rows)
+            return append_next_actions(
+                output,
+                [
+                    "Use `ami_get_dataset_prov` to trace the processing chain (EVNT→HITS→AOD→DAOD).",
+                    "Use `ami_get_physics_params` on the EVNT LDN for cross-section details.",
+                    "Use `ami_get_dataset_hashtags` on an EVNT LDN for PMG classification.",
+                ],
+            )
         except Exception as exc:  # noqa: BLE001
-            return f"Error: {exc}"
+            return format_error(
+                exc,
+                hints=[
+                    "Verify the LDN is complete: project.DSID.physicsShort.prodStep.dataType.tags",
+                    "Use `ami_list_datasets` to search by physicsShort pattern.",
+                ],
+            )
 
     @mcp.tool()
     async def ami_get_dataset_prov(
@@ -44,8 +89,9 @@ def register(mcp: FastMCP) -> None:
     ) -> str:
         """Get the provenance (parent/child chain) for an ATLAS dataset.
 
-        Returns node and edge information showing the dataset's processing
-        lineage (e.g. EVNT → HITS → RDO → AOD → DAOD).
+        Use this to trace a DAOD back to its EVNT, or to find derived datasets
+        from an EVNT. Returns node and edge information showing the dataset's
+        processing lineage (e.g. EVNT → HITS → RDO → AOD → DAOD).
 
         Args:
             dataset: Full Logical Dataset Name (LDN).
@@ -63,7 +109,13 @@ def register(mcp: FastMCP) -> None:
             if edges:
                 parts.append("## Edges")
                 parts.append(format_ami_result(edges))
-            return "\n\n".join(parts) if parts else "No provenance found."
+            if not parts:
+                return "No provenance found."
+            output = "\n\n".join(parts)
+            return append_next_actions(
+                output,
+                ["Use `ami_get_dataset_info` on any node LDN for its metadata."],
+            )
         except Exception as exc:  # noqa: BLE001
             return f"Error: {exc}"
 
@@ -117,6 +169,15 @@ def register(mcp: FastMCP) -> None:
         try:
             result = await run_ami_sync(client.execute, command, format="dom_object")
             rows = result.get_rows()
-            return format_ami_result(rows)
         except Exception as exc:  # noqa: BLE001
             return f"Error: {exc}"
+        output = format_ami_result(rows)
+        if rows:
+            output = append_next_actions(
+                output,
+                [
+                    "Use `ami_get_dataset_info` on a specific LDN for full metadata.",
+                    "Use `ami_get_physics_params` on an EVNT LDN for cross-section details.",
+                ],
+            )
+        return output

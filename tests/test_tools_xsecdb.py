@@ -17,15 +17,15 @@ if TYPE_CHECKING:
 # A minimal PMGxsecDB file for testing
 _MC16_HEADER = "dataset_number/I:physics_short/C:crossSection_pb/D:genFiltEff/D:kFactor/D:relUncertUP/D:relUncertDOWN/D:generator_name/C:etag/C"
 _MC16_ROWS = [
-    "700320\tSh_2211_Zee\t1234.5\t0.5\t1.1\t0.05\t0.05\tSherpa\te8351",
-    "700320\tSh_2211_Zee\t1300.0\t0.6\t1.0\t0.03\t0.03\tSherpa\te8999",
-    "700321\tSh_2211_Zmm\t1234.5\t1.0\t1.0\t0.05\t0.05\tSherpa\te8351",
+    "700320\t\tSh_2211_Zee\t\t1234.5\t\t0.5\t\t1.1\t\t0.05\t\t0.05\t\tSherpa\t\te8351",
+    "700320\t\tSh_2211_Zee\t\t1300.0\t\t0.6\t\t1.0\t\t0.03\t\t0.03\t\tSherpa\t\te8999",
+    "700321\t\tSh_2211_Zmm\t\t1234.5\t\t1.0\t\t1.0\t\t0.05\t\t0.05\t\tSherpa\t\te8351",
 ]
 
 # An older file that uses nb instead of pb
 _MC15_HEADER = "dataset_number/I:physics_short/C:crossSection/D:genFiltEff/D:kFactor/D:relUncertUP/D:relUncertDOWN/D:generator_name/C:etag/C"
 _MC15_ROWS = [
-    "361020\tSh_221_Zee\t1.2345\t1.0\t1.0\t0.05\t0.05\tSherpa\te5421",
+    "361020\t\tSh_221_Zee\t\t1.2345\t\t1.0\t\t1.0\t\t0.05\t\t0.05\t\tSherpa\t\te5421",
 ]
 
 

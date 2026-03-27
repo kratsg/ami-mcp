@@ -52,6 +52,46 @@ def format_ami_result(rows: list[Any], max_rows: int = 100) -> str:
     return "\n".join(lines)
 
 
+def append_next_actions(output: str, hints: list[str]) -> str:
+    """Append a '## Next steps' section to tool output.
+
+    Args:
+        output: The formatted tool output.
+        hints: List of suggested follow-up actions.
+
+    Returns:
+        output unchanged if hints is empty, otherwise output + next steps section.
+    """
+    if not hints:
+        return output
+    hint_lines = "\n".join(f"- {h}" for h in hints)
+    return f"{output}\n\n---\n**Next steps:**\n{hint_lines}"
+
+
+def format_error(
+    exc: Exception,
+    context: str = "",
+    hints: list[str] | None = None,
+) -> str:
+    """Format an error with optional context and recovery hints.
+
+    Args:
+        exc: The exception that was raised.
+        context: Optional additional context about what failed.
+        hints: Optional list of actionable recovery suggestions.
+
+    Returns:
+        Markdown-formatted error string.
+    """
+    lines = [f"**Error**: {exc}"]
+    if context:
+        lines.append(f"\n{context}")
+    if hints:
+        lines.append("\n**Try:**")
+        lines.extend(f"- {h}" for h in hints)
+    return "\n".join(lines)
+
+
 async def run_ami_sync(func: Any, *args: Any, **kwargs: Any) -> Any:
     """Run a synchronous pyAMI call in a thread to avoid blocking the event loop.
 

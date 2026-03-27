@@ -84,7 +84,7 @@ class TestAmiGetDatasetInfo:
             fn = registered_tools["ami_get_dataset_info"]
             result = await fn(dataset="bad.dataset", ctx=mock_ctx)
 
-        assert result.startswith("Error:")
+        assert "Error" in result
 
 
 class TestAmiGetDatasetProv:

@@ -6,7 +6,7 @@ from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP  # noqa: TC002
 
-from ami_mcp.tools._helpers import format_ami_result, run_ami_sync
+from ami_mcp.tools._helpers import format_ami_result, format_error, run_ami_sync
 
 
 def register(mcp: FastMCP) -> None:
@@ -20,9 +20,10 @@ def register(mcp: FastMCP) -> None:
     ) -> str:
         """Execute an arbitrary AMI command string and return the results.
 
-        This is the primary tool for querying AMI. Read the ami://query-language
-        resource to learn how to construct command strings. The LLM formulates
-        the command string; this tool executes it and returns formatted results.
+        Use this when no specialized tool covers your query. Read the
+        ami://query-language resource to learn how to construct command strings.
+        The LLM formulates the command string; this tool executes it and returns
+        formatted results.
 
         Common command patterns:
           SearchQuery -catalog="mc23_001:production" -entity="HASHTAGS"
@@ -46,4 +47,7 @@ def register(mcp: FastMCP) -> None:
             rows = result.get_rows()
             return format_ami_result(rows)
         except Exception as exc:  # noqa: BLE001
-            return f"Error: {exc}"
+            return format_error(
+                exc,
+                hints=["Read the ami://query-language resource for command syntax."],
+            )

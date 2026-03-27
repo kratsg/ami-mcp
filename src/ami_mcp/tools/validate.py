@@ -146,8 +146,9 @@ def register(mcp: FastMCP) -> None:
                 if hashtag_rows:
                     by_scope: dict[str, list[str]] = {}
                     for row in hashtag_rows:
-                        scope = row.get("SCOPE", "?")
-                        name = row.get("NAME", "?")
+                        # AMI returns lowercase keys: 'scope', 'name'
+                        scope = row.get("scope") or row.get("SCOPE", "?")
+                        name = row.get("name") or row.get("NAME", "?")
                         by_scope.setdefault(scope, []).append(name)
                     section_lines.append("### Hashtags")
                     section_lines.append("")

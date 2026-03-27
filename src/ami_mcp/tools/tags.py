@@ -6,7 +6,7 @@ from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP  # noqa: TC002
 
-from ami_mcp.tools._helpers import format_ami_result, run_ami_sync
+from ami_mcp.tools._helpers import append_next_actions, format_ami_result, run_ami_sync
 
 
 def register(mcp: FastMCP) -> None:
@@ -31,6 +31,15 @@ def register(mcp: FastMCP) -> None:
         try:
             result = await run_ami_sync(client.execute, command, format="dom_object")
             rows = result.get_rows("amiTagInfo")
-            return format_ami_result(rows)
         except Exception as exc:  # noqa: BLE001
             return f"Error: {exc}"
+        output = format_ami_result(rows)
+        if rows:
+            output = append_next_actions(
+                output,
+                [
+                    "Use `ami_get_dataset_info` on a dataset with this tag for its metadata.",
+                    "Use `ami_get_dataset_prov` to see all datasets in a processing chain.",
+                ],
+            )
+        return output

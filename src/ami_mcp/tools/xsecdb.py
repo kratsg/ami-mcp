@@ -61,7 +61,7 @@ def _parse_db_file(db_path: Path, dsid: int, etag: str | None) -> list[dict[str,
         stripped = raw_line.strip()
         if not stripped or stripped.startswith("#"):
             continue
-        parts = stripped.split("\t")
+        parts = [p for p in stripped.split("\t") if p]
         if len(parts) < len(columns):
             # Pad short rows
             parts += [""] * (len(columns) - len(parts))
@@ -155,44 +155,80 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool()
     async def ami_lookup_xsec(  # pylint: disable=unused-argument
         dsid: int,
-        database: str,
+        database: str | None = None,
         etag: str | None = None,
         *,
         ctx: Context[Any, Any],  # noqa: ARG001
     ) -> str:
         """Look up cross-section, filter efficiency, and k-factor for a DSID.
 
+        Use this to get the official PMG cross-section for a DSID. More
+        authoritative than AMI physics params for analysis use.
+
         Reads the specified PMG cross-section database file and returns the
         matching entry (or all entries if no etag is given and multiple exist).
+        If database is omitted, all available DB files are searched and all
+        matching entries are returned with the source file annotated.
 
         Args:
             dsid: Dataset number (DSID), e.g. 700320.
             database: Database file name or campaign shorthand.
                 Accepts the full filename (e.g. "PMGxsecDB_mc23.txt") or
                 just the campaign part (e.g. "mc23" or "mc16").
+                If omitted, all available databases are searched.
             etag: Optional evgen AMI tag to select a specific entry when a DSID
                 has multiple rows (e.g. "e8351"). If None, all rows are returned.
         """
         xsec_path = _get_xsec_path()
 
-        # Resolve db_file from the database argument
-        db_file: Path
+        _next_hints = [
+            "Use `ami_get_physics_params` to compare with AMI-registered values.",
+            "Use `ami_validate_sample` for automated cross-check against AMI.",
+        ]
+
+        if database is None:
+            # Search all available DB files
+            db_files = sorted(xsec_path.glob("PMGxsecDB*.txt"))
+            if not db_files:
+                return f"No PMGxsecDB*.txt files found in {xsec_path}"
+            all_sections: list[str] = []
+            for each_db in db_files:
+                try:
+                    rows = _parse_db_file(each_db, dsid, etag)
+                    if rows:
+                        formatted = _format_xsec_rows(rows)
+                        all_sections.append(f"### {each_db.name}\n\n{formatted}")
+                except Exception:  # noqa: BLE001, PERF203
+                    continue
+            if not all_sections:
+                return f"No matching entries found for DSID {dsid} in any database."
+            body = "\n\n".join(all_sections)
+            return f"{body}\n\n---\n**Next steps:**\n" + "\n".join(
+                f"- {h}" for h in _next_hints
+            )
+
+        # Resolve named_db from the database argument
         if database.endswith(".txt"):
-            db_file = xsec_path / database
+            named_db: Path = xsec_path / database
         else:
             # Treat as campaign name: mc23 -> PMGxsecDB_mc23.txt
-            db_file = xsec_path / f"PMGxsecDB_{database}.txt"
+            named_db = xsec_path / f"PMGxsecDB_{database}.txt"
 
-        if not db_file.exists():
+        if not named_db.exists():
             available = sorted(xsec_path.glob("PMGxsecDB*.txt"))
             names = ", ".join(f.name for f in available) if available else "none"
             return (
-                f"Error: database file {db_file.name!r} not found in {xsec_path}.\n"
+                f"Error: database file {named_db.name!r} not found in {xsec_path}.\n"
                 f"Available files: {names}"
             )
 
         try:
-            rows = _parse_db_file(db_file, dsid, etag)
-            return _format_xsec_rows(rows)
+            rows = _parse_db_file(named_db, dsid, etag)
         except Exception as exc:  # noqa: BLE001
-            return f"Error reading {db_file.name}: {exc}"
+            return f"Error reading {named_db.name}: {exc}"
+        result = _format_xsec_rows(rows)
+        if rows:
+            return f"{result}\n\n---\n**Next steps:**\n" + "\n".join(
+                f"- {h}" for h in _next_hints
+            )
+        return result
