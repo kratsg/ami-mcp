@@ -2266,7 +2266,7 @@ packages:
     target_platform: noarch
   depends:
   - mcp >=1.0
-  - python <3.12
+  - python >=3.10
   - python *
   license: Apache-2.0
 - conda: https://conda.anaconda.org/conda-forge/noarch/annotated-doc-0.0.4-pyhcf101f3_0.conda

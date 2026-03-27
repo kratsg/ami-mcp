@@ -18,13 +18,13 @@ backend = { name = "pixi-build-python", version = "*" }
 config = { noarch = true }
 
 [package.host-dependencies]
+python = "<3.12"   # ensures the host/build environment uses Python ≤3.11
 uv = "*"
 hatchling = ">=1.25"
 hatch-vcs = ">=0.4"
 
 [package.run-dependencies]
 mcp = ">=1.0"
-python = "<3.12"   # ensures the host/build environment uses Python ≤3.11
 
 [pypi-dependencies]
 pyAMI-core = "*"
