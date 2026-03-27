@@ -138,11 +138,13 @@ Examples:
     -mql="SELECT DISTINCT `mc23_001:production`.`HASHTAGS`.`NAME`
           WHERE `mc23_001:production`.`HASHTAGS`.`SCOPE` = 'PMGL1'"
 
-  # Find datasets tagged WeakBoson/Vjets/Baseline in mc20:
+  # Find mc20 EVNT datasets with PMGL1=WeakBoson (single-level filter):
   SearchQuery -catalog="mc15_001:production" -entity="HASHTAGS"
     -mql="SELECT `mc15_001:production`.`HASHTAGS`.`LDN`
           WHERE `mc15_001:production`.`HASHTAGS`.`NAME` = 'WeakBoson'
           AND `mc15_001:production`.`HASHTAGS`.`SCOPE` = 'PMGL1'"
+  # Note: for multi-level hashtag filtering (e.g. WeakBoson/Vjets/Baseline),
+  # use DatasetWBListDatasetsForHashtag (see below) or the ami_search_by_hashtags tool.
 
   # Search for Zee datasets with DSID >= 700000:
   SearchQuery -catalog="mc15_001:production" -entity="dataset"

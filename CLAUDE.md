@@ -191,7 +191,7 @@ GetPhysicsParamsForDataset -logicalDatasetName="..."
 DatasetWBListHashtags -ldn="mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351"
 
 # Datasets for hashtag combination
-DatasetWBListDatasetsForHashtag -scope="mc20_13TeV" -l1tag="WeakBoson" -l2tag="Vjets" -l3tag="Baseline"
+DatasetWBListDatasetsForHashtag -logicalDatasetName="mc20_13TeV.*" -PMGL1="WeakBoson" -PMGL2="Vjets" -PMGL3="Baseline"
 
 # General SearchQuery (LLM-formulated)
 SearchQuery -catalog="mc23_001:production" -entity="HASHTAGS"

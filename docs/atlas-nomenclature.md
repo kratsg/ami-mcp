@@ -45,7 +45,7 @@ project.datasetNumber.physicsShort.prodStep.dataType.AMITags
 **Example:**
 
 ```
-mc20_13TeV:mc20_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.deriv.DAOD_PHYS.e8351_s3681_r13144_r13146_p5855
+mc20_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.deriv.DAOD_PHYS.e8351_s3681_r13144_r13146_p5855
 ```
 
 | Field           | Value                             | Meaning                              |
@@ -66,7 +66,7 @@ project.runNumber.streamName.prodStep.dataType.AMITags
 ```
 
 ```
-data18_13TeV:data18_13TeV.00348885.physics_Main.deriv.DAOD_PHYS.r13286_p4910_p5855
+data18_13TeV.00348885.physics_Main.deriv.DAOD_PHYS.r13286_p4910_p5855
 ```
 
 **Physics containers** (preferred for analysis — groups all runs in a period):
@@ -76,7 +76,7 @@ project.periodName.streamName.PhysCont.dataType.contVersion
 ```
 
 ```
-data15_13TeV:data15_13TeV.periodAllYear.physics_Main.PhysCont.DAOD_PHYSLITE.grp15_v01_p5631
+data15_13TeV.periodAllYear.physics_Main.PhysCont.DAOD_PHYSLITE.grp15_v01_p5631
 ```
 
 Use `periodAllYear` to get the full dataset for a given year, or specific period

@@ -2,7 +2,7 @@
 icon: lucide/rocket
 ---
 
-# rucio-mcp
+# ami-mcp
 
 --8<-- "README.md:intro"
 
