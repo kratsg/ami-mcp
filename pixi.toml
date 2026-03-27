@@ -7,6 +7,7 @@ preview = ["pixi-build"]
 
 [dependencies]
 ami-mcp = { path = "./" }
+setuptools = "*"
 
 [package]
 name = "ami-mcp"
@@ -26,7 +27,7 @@ mcp = ">=1.0"
 
 [pypi-dependencies]
 pyAMI-core = "*"
-pyAMI-atlas = ">=0.5"
+pyAMI-atlas = "*"
 
 [pypi-options]
 no-build-isolation = ["pyami-atlas"]
