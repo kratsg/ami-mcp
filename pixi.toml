@@ -25,6 +25,7 @@ hatch-vcs = ">=0.4"
 
 [package.run-dependencies]
 mcp = ">=1.0"
+ca-policy-lcg = "*"
 
 [pypi-dependencies]
 pyAMI-core = "*"
