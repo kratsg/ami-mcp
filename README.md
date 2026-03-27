@@ -178,10 +178,10 @@ or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
 Once configured, you can ask Claude things like:
 
-- _"Find all Baseline WeakBoson/Vjets samples in mc20_13TeV"_
+- _"Find all Baseline WeakBoson/Vjets samples in mc21_13TeV"_
 - _"What are the cross-section and filter efficiency for DSID 700320?"_
 - _"Look up the hashtag classification for this EVNT dataset"_
-- _"Validate these samples against the mc20 cross-section database"_
+- _"Validate these samples against the mc21 cross-section database"_
 - _"Show me the provenance chain for this DAOD dataset"_
 - _"What AMI tag e8351 corresponds to — which generator version?"_
 
