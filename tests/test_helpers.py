@@ -45,3 +45,29 @@ class TestFormatAmiResult:
         result = format_ami_result(["alpha", "beta"])
         assert "alpha" in result
         assert "beta" in result
+
+    def test_single_row_many_columns_renders_vertical(self) -> None:
+        # More than 6 keys → vertical Field | Value table
+        keys = [f"col{i}" for i in range(7)]
+        rows = [OrderedDict((k, f"val{i}") for i, k in enumerate(keys))]
+        result = format_ami_result(rows)
+        assert "| Field | Value |" in result
+        assert "| col0 | val0 |" in result
+
+    def test_single_row_few_columns_renders_horizontal(self) -> None:
+        # 2 keys → horizontal table (below threshold)
+        rows = [OrderedDict([("NAME", "WeakBoson"), ("SCOPE", "PMGL1")])]
+        result = format_ami_result(rows)
+        assert "| NAME | SCOPE |" in result
+        assert "| Field | Value |" not in result
+
+    def test_multi_row_many_columns_renders_horizontal(self) -> None:
+        # Multiple rows always use horizontal format regardless of column count
+        keys = [f"col{i}" for i in range(7)]
+        rows = [
+            OrderedDict((k, f"row0_{k}") for k in keys),
+            OrderedDict((k, f"row1_{k}") for k in keys),
+        ]
+        result = format_ami_result(rows)
+        assert "| col0 |" in result
+        assert "| Field | Value |" not in result

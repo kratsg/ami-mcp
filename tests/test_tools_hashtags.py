@@ -82,7 +82,7 @@ class TestAmiSearchByHashtags:
         registered_tools: dict[str, Callable[..., Awaitable[str]]],
         mock_ctx: MagicMock,
     ) -> None:
-        """Result should be plain LDN lines, not a table with id/catalog columns."""
+        """Result should be LDN bullet list, not a table with id/catalog columns."""
         result_mock = MagicMock()
         result_mock.get_rows.return_value = [
             OrderedDict(
@@ -100,9 +100,10 @@ class TestAmiSearchByHashtags:
             fn = registered_tools["ami_search_by_hashtags"]
             result = await fn(scope="mc20_13TeV", l1="WeakBoson", ctx=mock_ctx)
 
-        assert result == "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351"
+        assert "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351" in result
         assert "catalog" not in result
         assert "12345" not in result
+        assert "## Matching Datasets" in result
 
     async def test_returns_error_on_exception(
         self,

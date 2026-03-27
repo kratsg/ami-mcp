@@ -6,20 +6,22 @@ import asyncio
 from collections import OrderedDict
 from typing import Any
 
+_VERTICAL_THRESHOLD = 6
+
 
 def format_ami_result(rows: list[Any], max_rows: int = 100) -> str:
-    """Format a list of AMI result rows as LLM-friendly text.
+    """Format a list of AMI result rows as LLM-friendly markdown.
 
-    Each row (an OrderedDict or plain dict) is rendered as a pipe-separated
-    key=value line. The first row's keys are used as a header. Results are
-    truncated at max_rows with a trailing count message.
+    Single-row results with many columns are rendered as a vertical
+    Field | Value table for readability. Multi-row results use a standard
+    horizontal table. Results are truncated at max_rows.
 
     Args:
         rows: List of OrderedDicts returned by DOMObject.get_rows().
         max_rows: Maximum number of rows to include before truncating.
 
     Returns:
-        Formatted string, or "No results." if rows is empty.
+        Formatted markdown string, or "No results." if rows is empty.
     """
     if not rows:
         return "No results."
@@ -29,13 +31,18 @@ def format_ami_result(rows: list[Any], max_rows: int = 100) -> str:
 
     if isinstance(display[0], (dict, OrderedDict)):
         keys = list(display[0].keys())
-        header = "| " + " | ".join(keys) + " |"
-        separator = "| " + " | ".join("---" for _ in keys) + " |"
-        lines = [header, separator]
-        lines.extend(
-            "| " + " | ".join(str(row.get(k, "")) for k in keys) + " |"
-            for row in display
-        )
+        # Single row with many columns → vertical Field | Value table
+        if len(display) == 1 and len(keys) > _VERTICAL_THRESHOLD:
+            lines = ["| Field | Value |", "| --- | --- |"]
+            lines.extend(f"| {k} | {display[0].get(k, '')} |" for k in keys)
+        else:
+            header = "| " + " | ".join(keys) + " |"
+            separator = "| " + " | ".join("---" for _ in keys) + " |"
+            lines = [header, separator]
+            lines.extend(
+                "| " + " | ".join(str(row.get(k, "")) for k in keys) + " |"
+                for row in display
+            )
     else:
         lines = [str(r) for r in display]
 

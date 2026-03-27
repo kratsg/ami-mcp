@@ -73,7 +73,13 @@ def register(mcp: FastMCP) -> None:
             rows = [r for r in rows if r.get("ldn", "").startswith(f"{scope}.")]
             if not rows:
                 return "No results."
-            return "\n".join(r["ldn"] for r in rows)
+            ldns = [r["ldn"] for r in rows]
+            lines = [
+                f"## Matching Datasets ({len(ldns)} found)",
+                "",
+                *[f"- `{ldn}`" for ldn in ldns],
+            ]
+            return "\n".join(lines)
         except Exception as exc:  # noqa: BLE001
             return f"Error: {exc}"
 

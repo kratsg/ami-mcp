@@ -39,18 +39,29 @@ def register(mcp: FastMCP) -> None:
             if not rows:
                 return "No physics parameters found."
 
-            lines: list[str] = []
+            table_rows: list[str] = []
             for row in rows:
                 for key, value in row.items():
                     if key == "crossSection" and value not in (None, "", "N/A"):
                         try:
                             xs_nb = float(value)
                             xs_pb = xs_nb * 1000.0
-                            lines.append(f"crossSection: {value} nb  ({xs_pb:.6g} pb)")
+                            table_rows.append(
+                                f"| crossSection | {value} nb ({xs_pb:.6g} pb) |"
+                            )
                         except (ValueError, TypeError):
-                            lines.append(f"crossSection: {value}")
+                            table_rows.append(f"| crossSection | {value} |")
                     elif value is not None and value != "":
-                        lines.append(f"{key}: {value}")
-            return "\n".join(lines) if lines else "No physics parameters found."
+                        table_rows.append(f"| {key} | {value} |")
+            if not table_rows:
+                return "No physics parameters found."
+            lines = [
+                "## Physics Parameters",
+                "",
+                "| Parameter | Value |",
+                "| --- | --- |",
+                *table_rows,
+            ]
+            return "\n".join(lines)
         except Exception as exc:  # noqa: BLE001
             return f"Error: {exc}"

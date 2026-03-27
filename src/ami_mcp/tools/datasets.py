@@ -6,7 +6,7 @@ from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP  # noqa: TC002
 
-from ami_mcp.tools._helpers import format_ami_result, run_ami_sync
+from ami_mcp.tools._helpers import format_ami_result, run_ami_sync, scope_to_catalog
 
 
 def register(mcp: FastMCP) -> None:
@@ -58,10 +58,10 @@ def register(mcp: FastMCP) -> None:
             edges = result.get_rows("edge")
             parts: list[str] = []
             if nodes:
-                parts.append("Nodes:")
+                parts.append("## Nodes")
                 parts.append(format_ami_result(nodes))
             if edges:
-                parts.append("Edges:")
+                parts.append("## Edges")
                 parts.append(format_ami_result(edges))
             return "\n\n".join(parts) if parts else "No provenance found."
         except Exception as exc:  # noqa: BLE001
@@ -70,34 +70,41 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool()
     async def ami_list_datasets(
         patterns: str,
+        project: str,
         fields: str | None = None,
-        project: str | None = None,
         data_type: str | None = None,
         limit: int = 100,
         *,
         ctx: Context[Any, Any],
     ) -> str:
-        """List ATLAS datasets matching a name pattern via AMI SearchQuery.
+        """List ATLAS datasets matching a physicsShort pattern via AMI SearchQuery.
 
-        Searches the AMI dataset catalog. Use % as the wildcard character.
+        Searches the AMI dataset catalog using the physicsShort field (the
+        human-readable process name). Use % as the wildcard character.
+
+        Note: AMI's SearchQuery -entity="dataset" does not support LIKE on
+        logicalDatasetName. Filter on physicsShort instead, e.g. "%Zee%" to
+        find Zee datasets. The project is required to select the correct catalog.
 
         For more control over the query, use ami_execute directly with a
         SearchQuery command (see ami://query-language resource).
 
         Args:
-            patterns: Dataset name pattern with % wildcards, e.g.
-                "mc20_13TeV.%.Sh_2211_Zee%.evgen.EVNT.%"
+            patterns: physicsShort pattern with % wildcards, e.g. "%Zee%".
+            project: ATLAS project/campaign (e.g. "mc20_13TeV", "mc23_13p6TeV").
+                Required to select the correct AMI catalog.
             fields: Comma-separated extra fields to return (e.g. "nFiles,nEvents").
-            project: Filter by project (e.g. "mc20_13TeV").
             data_type: Filter by data type (e.g. "EVNT", "DAOD_PHYS").
             limit: Maximum number of results to return (default 100).
         """
         client = ctx.request_context.lifespan_context["ami_client"]
+        catalog = scope_to_catalog(project)
 
-        # Build a SearchQuery for datasets
-        conditions: list[str] = [f"logicalDatasetName LIKE '{patterns}'"]
-        if project:
-            conditions.append(f"projectName = '{project}'")
+        conditions: list[str] = [
+            f"physicsShort LIKE '{patterns}'",
+            f"projectName = '{project}'",
+            "amiStatus = 'VALID'",
+        ]
         if data_type:
             conditions.append(f"dataType = '{data_type}'")
 
@@ -105,13 +112,8 @@ def register(mcp: FastMCP) -> None:
         if fields:
             select_fields += ", " + fields
 
-        mql = (
-            f"SELECT {select_fields} "
-            f"WHERE {' AND '.join(conditions)} "
-            f"AND amiStatus = 'VALID' "
-            f"LIMIT {limit}"
-        )
-        command = f'SearchQuery -catalog="datasets" -mql="{mql}"'
+        mql = f"SELECT {select_fields} WHERE {' AND '.join(conditions)} LIMIT {limit}"
+        command = f'SearchQuery -catalog="{catalog}" -entity="dataset" -mql="{mql}"'
         try:
             result = await run_ami_sync(client.execute, command, format="dom_object")
             rows = result.get_rows()

@@ -75,30 +75,37 @@ def _parse_db_file(db_path: Path, dsid: int, etag: str | None) -> list[dict[str,
 
 
 def _format_xsec_rows(rows: list[dict[str, str]]) -> str:
-    """Format xsec DB rows for LLM display, converting units where needed."""
+    """Format xsec DB rows as markdown tables, converting units where needed."""
     if not rows:
         return "No matching entries found."
 
-    lines: list[str] = []
+    sections: list[str] = []
     for i, row in enumerate(rows):
+        entry_lines: list[str] = []
         if len(rows) > 1:
-            lines.append(f"--- Entry {i + 1} ---")
+            entry_lines.append(f"## Entry {i + 1}")
+            entry_lines.append("")
+        entry_lines.append("| Field | Value |")
+        entry_lines.append("| --- | --- |")
         for key, value in row.items():
             if not value:
                 continue
             # Normalise cross-section to pb for display
             if key == "crossSection_pb":
-                lines.append(f"crossSection: {value} pb")
+                entry_lines.append(f"| crossSection | {value} pb |")
             elif key == "crossSection":
                 # Older files store in nb; convert to pb
                 try:
                     xs_pb = float(value) * 1000.0
-                    lines.append(f"crossSection: {value} nb  ({xs_pb:.6g} pb)")
+                    entry_lines.append(
+                        f"| crossSection | {value} nb ({xs_pb:.6g} pb) |"
+                    )
                 except (ValueError, TypeError):
-                    lines.append(f"crossSection: {value} (nb)")
+                    entry_lines.append(f"| crossSection | {value} (nb) |")
             else:
-                lines.append(f"{key}: {value}")
-    return "\n".join(lines)
+                entry_lines.append(f"| {key} | {value} |")
+        sections.append("\n".join(entry_lines))
+    return "\n\n".join(sections)
 
 
 def register(mcp: FastMCP) -> None:
@@ -129,12 +136,19 @@ def register(mcp: FastMCP) -> None:
         if not db_files:
             return f"No PMGxsecDB*.txt files found in {xsec_path}"
 
-        lines = [f"PMG cross-section databases in {xsec_path}:", ""]
+        lines = [
+            "## PMG Cross-Section Databases",
+            "",
+            f"Path: `{xsec_path}`",
+            "",
+            "| File | Campaign |",
+            "| --- | --- |",
+        ]
         for f in db_files:
             # Extract campaign name from filename: PMGxsecDB_mc16.txt -> mc16
             stem = f.stem  # e.g. PMGxsecDB_mc16
             campaign = stem.replace("PMGxsecDB_", "").replace("PMGxsecDB", "")
-            lines.append(f"  {f.name}  (campaign: {campaign or 'unknown'})")
+            lines.append(f"| {f.name} | {campaign or 'unknown'} |")
 
         return "\n".join(lines)
 
@@ -167,12 +181,7 @@ def register(mcp: FastMCP) -> None:
             db_file = xsec_path / database
         else:
             # Treat as campaign name: mc23 -> PMGxsecDB_mc23.txt
-            candidate = xsec_path / f"PMGxsecDB_{database}.txt"
-            if candidate.exists():
-                db_file = candidate
-            else:
-                # Fallback: bare PMGxsecDB.txt
-                db_file = xsec_path / f"PMGxsecDB{database}.txt"
+            db_file = xsec_path / f"PMGxsecDB_{database}.txt"
 
         if not db_file.exists():
             available = sorted(xsec_path.glob("PMGxsecDB*.txt"))

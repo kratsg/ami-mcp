@@ -26,7 +26,7 @@ def _compare_xsec_row(
     db_row: dict[str, str],
     ami_params: dict[str, str],
 ) -> None:
-    """Append OK/WARNING lines comparing AMI params against one DB row."""
+    """Append OK/WARNING bullet lines comparing AMI params against one DB row."""
     for ami_key, db_key, unit_factor, label in _XSEC_COMPARE_FIELDS:
         if db_key not in db_row:
             continue
@@ -39,10 +39,10 @@ def _compare_xsec_row(
             db_val = float(db_val_str)
             if abs(ami_val - db_val) > 1e-6 * max(abs(db_val), 1.0):
                 section_lines.append(
-                    f"  WARNING: AMI {label}={ami_val:.6g} != DB {label}={db_val:.6g}"
+                    f"- **WARNING**: AMI {label}={ami_val:.6g} != DB {label}={db_val:.6g}"
                 )
             else:
-                section_lines.append(f"  OK: {label}={db_val:.6g} (matches DB)")
+                section_lines.append(f"- **OK**: {label}={db_val:.6g} (matches DB)")
         except (ValueError, TypeError):
             pass
 
@@ -63,7 +63,7 @@ def _xsec_db_section(
 
     if not db_file.exists():
         section_lines.append(
-            f"  xsec DB: file {db_file.name!r} not found - skipping comparison"
+            f"*xsec DB: file {db_file.name!r} not found — skipping comparison*"
         )
         return
 
@@ -79,21 +79,24 @@ def _xsec_db_section(
                 break
 
     if dsid is None:
-        section_lines.append("  xsec DB: could not extract DSID from LDN")
+        section_lines.append("*xsec DB: could not extract DSID from LDN*")
         return
 
     try:
         db_rows = _parse_db_file(db_file, dsid, etag)
         if not db_rows:
             section_lines.append(
-                f"  xsec DB: DSID {dsid}"
+                f"*xsec DB: DSID {dsid}"
                 + (f" etag {etag}" if etag else "")
-                + " not found in DB"
+                + " not found in DB*"
             )
         else:
+            section_lines.append("### Cross-Section Comparison")
+            section_lines.append("")
             _compare_xsec_row(section_lines, db_rows[0], ami_params)
+            section_lines.append("")
     except Exception as exc:  # noqa: BLE001
-        section_lines.append(f"  xsec DB comparison error: {exc}")
+        section_lines.append(f"*xsec DB comparison error: {exc}*")
 
 
 def register(mcp: FastMCP) -> None:
@@ -130,7 +133,7 @@ def register(mcp: FastMCP) -> None:
         output_sections: list[str] = []
 
         for ldn in ldn_list:
-            section_lines = [f"=== {ldn} ==="]
+            section_lines = [f"## {ldn}", ""]
 
             # --- Hashtag lookup ---
             try:
@@ -146,15 +149,22 @@ def register(mcp: FastMCP) -> None:
                         scope = row.get("SCOPE", "?")
                         name = row.get("NAME", "?")
                         by_scope.setdefault(scope, []).append(name)
+                    section_lines.append("### Hashtags")
+                    section_lines.append("")
+                    section_lines.append("| Level | Tags |")
+                    section_lines.append("| --- | --- |")
+                    _none = "\u2014"
                     for level in ("PMGL1", "PMGL2", "PMGL3", "PMGL4"):
                         names = by_scope.get(level, [])
-                        section_lines.append(
-                            f"  {level}: {', '.join(names) if names else 'NONE'}"
-                        )
+                        tag_str = ", ".join(names) if names else _none
+                        section_lines.append(f"| {level} | {tag_str} |")
+                    section_lines.append("")
                 else:
-                    section_lines.append("  Hashtags: none found in AMI")
+                    section_lines.append("*No hashtags found in AMI.*")
+                    section_lines.append("")
             except Exception as exc:  # noqa: BLE001
-                section_lines.append(f"  Hashtag lookup error: {exc}")
+                section_lines.append(f"*Hashtag lookup error: {exc}*")
+                section_lines.append("")
 
             # --- Physics params from AMI ---
             ami_params: dict[str, str] = {}
@@ -168,7 +178,8 @@ def register(mcp: FastMCP) -> None:
                 if phys_rows:
                     ami_params = dict(phys_rows[0])
             except Exception as exc:  # noqa: BLE001
-                section_lines.append(f"  Physics params lookup error: {exc}")
+                section_lines.append(f"*Physics params lookup error: {exc}*")
+                section_lines.append("")
 
             # --- Cross-section DB comparison ---
             if database is not None and ami_params:
