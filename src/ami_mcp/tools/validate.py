@@ -3,12 +3,97 @@
 from __future__ import annotations
 
 import contextlib
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from mcp.server.fastmcp import Context, FastMCP  # noqa: TC002
 
 from ami_mcp.tools._helpers import run_ami_sync
 from ami_mcp.tools.xsecdb import _get_xsec_path, _parse_db_file
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+_XSEC_COMPARE_FIELDS = [
+    ("crossSection", "crossSection_pb", 1000.0, "crossSection"),
+    ("crossSection", "crossSection", 1.0, "crossSection"),
+    ("genFiltEff", "genFiltEff", 1.0, "genFiltEff"),
+    ("kFactor", "kFactor", 1.0, "kFactor"),
+]
+
+
+def _compare_xsec_row(
+    section_lines: list[str],
+    db_row: dict[str, str],
+    ami_params: dict[str, str],
+) -> None:
+    """Append OK/WARNING lines comparing AMI params against one DB row."""
+    for ami_key, db_key, unit_factor, label in _XSEC_COMPARE_FIELDS:
+        if db_key not in db_row:
+            continue
+        ami_val_str = ami_params.get(ami_key, "")
+        db_val_str = db_row.get(db_key, "")
+        if not ami_val_str or not db_val_str:
+            continue
+        try:
+            ami_val = float(ami_val_str) * unit_factor
+            db_val = float(db_val_str)
+            if abs(ami_val - db_val) > 1e-6 * max(abs(db_val), 1.0):
+                section_lines.append(
+                    f"  WARNING: AMI {label}={ami_val:.6g} != DB {label}={db_val:.6g}"
+                )
+            else:
+                section_lines.append(f"  OK: {label}={db_val:.6g} (matches DB)")
+        except (ValueError, TypeError):
+            pass
+
+
+def _xsec_db_section(
+    section_lines: list[str],
+    ldn: str,
+    database: str,
+    ami_params: dict[str, str],
+) -> None:
+    """Append cross-section DB comparison lines to section_lines."""
+    xsec_path = _get_xsec_path()
+    db_file: Path = (
+        xsec_path / database
+        if database.endswith(".txt")
+        else xsec_path / f"PMGxsecDB_{database}.txt"
+    )
+
+    if not db_file.exists():
+        section_lines.append(
+            f"  xsec DB: file {db_file.name!r} not found - skipping comparison"
+        )
+        return
+
+    parts = ldn.split(".")
+    dsid: int | None = None
+    etag: str | None = None
+    with contextlib.suppress(ValueError, IndexError):
+        dsid = int(parts[1]) if len(parts) > 1 else None
+    if len(parts) > 5:
+        for tag_part in parts[-1].split("_"):
+            if tag_part.startswith("e") and tag_part[1:].isdigit():
+                etag = tag_part
+                break
+
+    if dsid is None:
+        section_lines.append("  xsec DB: could not extract DSID from LDN")
+        return
+
+    try:
+        db_rows = _parse_db_file(db_file, dsid, etag)
+        if not db_rows:
+            section_lines.append(
+                f"  xsec DB: DSID {dsid}"
+                + (f" etag {etag}" if etag else "")
+                + " not found in DB"
+            )
+        else:
+            _compare_xsec_row(section_lines, db_rows[0], ami_params)
+    except Exception as exc:  # noqa: BLE001
+        section_lines.append(f"  xsec DB comparison error: {exc}")
 
 
 def register(mcp: FastMCP) -> None:
@@ -56,7 +141,6 @@ def register(mcp: FastMCP) -> None:
                 )
                 hashtag_rows = hashtag_result.get_rows()
                 if hashtag_rows:
-                    # Group by SCOPE
                     by_scope: dict[str, list[str]] = {}
                     for row in hashtag_rows:
                         scope = row.get("SCOPE", "?")
@@ -88,87 +172,7 @@ def register(mcp: FastMCP) -> None:
 
             # --- Cross-section DB comparison ---
             if database is not None and ami_params:
-                xsec_path = _get_xsec_path()
-                # Determine DB file path
-                if database.endswith(".txt"):
-                    db_file = xsec_path / database
-                else:
-                    db_file = xsec_path / f"PMGxsecDB_{database}.txt"
-
-                if not db_file.exists():
-                    section_lines.append(
-                        f"  xsec DB: file {db_file.name!r} not found — skipping comparison"
-                    )
-                else:
-                    # Extract DSID and etag from LDN
-                    parts = ldn.split(".")
-                    dsid: int | None = None
-                    etag: str | None = None
-                    with contextlib.suppress(ValueError, IndexError):
-                        dsid = int(parts[1]) if len(parts) > 1 else None
-                    # Find etag from version tag (last field, starts with 'e')
-                    if len(parts) > 5:
-                        version_tag = parts[-1]
-                        for tag_part in version_tag.split("_"):
-                            if tag_part.startswith("e") and tag_part[1:].isdigit():
-                                etag = tag_part
-                                break
-
-                    if dsid is None:
-                        section_lines.append(
-                            "  xsec DB: could not extract DSID from LDN"
-                        )
-                    else:
-                        try:
-                            db_rows = _parse_db_file(db_file, dsid, etag)
-                            if not db_rows:
-                                section_lines.append(
-                                    f"  xsec DB: DSID {dsid}"
-                                    + (f" etag {etag}" if etag else "")
-                                    + " not found in DB"
-                                )
-                            else:
-                                db_row = db_rows[0]
-                                for ami_key, db_key, unit_factor, label in [
-                                    (
-                                        "crossSection",
-                                        "crossSection_pb",
-                                        1000.0,
-                                        "crossSection",
-                                    ),
-                                    (
-                                        "crossSection",
-                                        "crossSection",
-                                        1.0,
-                                        "crossSection",
-                                    ),
-                                    ("genFiltEff", "genFiltEff", 1.0, "genFiltEff"),
-                                    ("kFactor", "kFactor", 1.0, "kFactor"),
-                                ]:
-                                    if db_key not in db_row:
-                                        continue
-                                    ami_val_str = ami_params.get(ami_key, "")
-                                    db_val_str = db_row.get(db_key, "")
-                                    if not ami_val_str or not db_val_str:
-                                        continue
-                                    try:
-                                        ami_val = float(ami_val_str) * unit_factor
-                                        db_val = float(db_val_str)
-                                        if abs(ami_val - db_val) > 1e-6 * max(
-                                            abs(db_val), 1.0
-                                        ):
-                                            section_lines.append(
-                                                f"  WARNING: AMI {label}={ami_val:.6g}"
-                                                f" != DB {label}={db_val:.6g}"
-                                            )
-                                        else:
-                                            section_lines.append(
-                                                f"  OK: {label}={db_val:.6g} (matches DB)"
-                                            )
-                                    except (ValueError, TypeError):
-                                        pass
-                        except Exception as exc:  # noqa: BLE001
-                            section_lines.append(f"  xsec DB comparison error: {exc}")
+                _xsec_db_section(section_lines, ldn, database, ami_params)
 
             output_sections.append("\n".join(section_lines))
 

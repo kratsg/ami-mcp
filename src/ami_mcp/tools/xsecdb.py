@@ -105,7 +105,7 @@ def register(mcp: FastMCP) -> None:
     """Register PMG cross-section database tools."""
 
     @mcp.tool()
-    async def ami_list_xsec_databases(
+    async def ami_list_xsec_databases(  # pylint: disable=unused-argument
         *,
         ctx: Context[Any, Any],  # noqa: ARG001
     ) -> str:
@@ -139,7 +139,7 @@ def register(mcp: FastMCP) -> None:
         return "\n".join(lines)
 
     @mcp.tool()
-    async def ami_lookup_xsec(
+    async def ami_lookup_xsec(  # pylint: disable=unused-argument
         dsid: int,
         database: str,
         etag: str | None = None,
