@@ -97,12 +97,58 @@ AMI (ATLAS Metadata Interface) accepts command strings via client.execute().
 The primary commands for ATLAS dataset operations are:
 
 ═══════════════════════════════════════════════════════════════
+MQL GRAMMAR (AMICoreLib/src/main/antlr4/.../MQL.g4)
+═══════════════════════════════════════════════════════════════
+MQL (Metadata Query Language) is a SQL-like language used in -mql= arguments.
+
+SELECT statement (the only form you need for reads):
+  SELECT [DISTINCT] col [, col ...]
+    [WHERE expr]
+    [GROUP BY col [, col ...]]
+    [ORDER BY col [, col ...] [ASC | DESC]]
+    [LIMIT n [OFFSET m]]
+
+Identifiers (field/table names) — three quoting forms:
+  plain          NAME, SCOPE, logicalDatasetName   (alphanumeric + _ # $)
+  backtick       `catalog:name`.`entity`.`field`   (escape literal backtick as ``)
+  double-quote   "my field"                         (escape literal " as "")
+  Keywords must be quoted if used as names.
+
+String literals: single-quoted  'WeakBoson'  (escape ' as '')
+
+Comparison operators:
+  =  !=  <>  ^=  <=>  <  >  <=  >=
+
+Logical operators (case-insensitive; symbol aliases shown):
+  AND  (&&)   OR  (||)   XOR  (^^)   NOT
+
+String / pattern operators:
+  LIKE     'pattern%'   -- % wildcard, _ single char; NOT LIKE also valid
+  REGEXP   'pattern'    -- regular expression match
+  BETWEEN  v1 AND v2
+  IN       (v1, v2, ...)
+  IS NULL  /  IS NOT NULL
+
+Arithmetic: + - * / %
+
+Built-in functions:
+  Aggregates:  COUNT(x)  SUM(x)  AVG(x)  MIN(x)  MAX(x)  STDEV(x)
+  Math:        ABS  SQRT  POW  LOG  SIN  COS  ROUND  MOD  RAND
+  String:      LOWER  UPPER  CONCAT  LENGTH  SUBSTR
+  Time:        TIMESTAMP  AMI_TIMESTAMP  AMI_DATE  AMI_TIME
+  JSON:        JSON_<key>
+
+LIMIT syntax:  LIMIT 50        -- first 50 rows
+               LIMIT 50 OFFSET 200  -- rows 201-250
+
+Comments:  -- this is a comment (to end of line)
+
+═══════════════════════════════════════════════════════════════
 SEARCHQUERY — General MQL queries
 ═══════════════════════════════════════════════════════════════
 Syntax:
   SearchQuery -catalog="<catalog>" -entity="<entity>"
-              -mql="SELECT [DISTINCT] <fields> [WHERE <conditions>]
-                    [ORDER BY <field>] [LIMIT <n>]"
+              -mql="<mql_select_statement>"
 
 Catalogs:
   mc15_001:production    mc16 + mc20 evgen datasets
@@ -115,59 +161,66 @@ Entities (tables) within a catalog:
   projects               Projects
   files                  Files
 
-Field reference for 'dataset' entity (use backtick-quoted fully qualified names):
-  `<catalog>`.`dataset`.`logicalDatasetName`   full dataset LDN
-  `<catalog>`.`dataset`.`datasetNumber`         DSID (integer)
-  `<catalog>`.`dataset`.`physicsShort`          process description
-  `<catalog>`.`dataset`.`amiStatus`             VALID, INVALID, etc.
-  `<catalog>`.`dataset`.`crossSection`          cross-section (nb)
-  `<catalog>`.`dataset`.`genFiltEff`            filter efficiency
-  `<catalog>`.`dataset`.`kFactor`               k-factor
-  `<catalog>`.`dataset`.`prodsysStatus`         production status
+Field reference for 'dataset' entity:
+  logicalDatasetName    full dataset LDN
+  datasetNumber         DSID (integer)
+  physicsShort          process description
+  amiStatus             VALID, INVALID, etc.
+  crossSection          cross-section (nb)
+  genFiltEff            filter efficiency
+  kFactor               k-factor
+  prodsysStatus         production status
+
+  Fully-qualified form (needed when joining):
+    `mc15_001:production`.`dataset`.`logicalDatasetName`
 
 Field reference for 'HASHTAGS' entity:
-  `<catalog>`.`HASHTAGS`.`NAME`                 hashtag name
-  `<catalog>`.`HASHTAGS`.`SCOPE`                PMGL1 / PMGL2 / PMGL3 / PMGL4
-  `<catalog>`.`HASHTAGS`.`LDN`                  dataset LDN this tag applies to
-
-Wildcards: use % (SQL-style), not * (glob-style)
+  NAME       hashtag name (e.g. WeakBoson, Vjets, Baseline)
+  SCOPE      level: PMGL1 / PMGL2 / PMGL3 / PMGL4
+  fullname   fully qualified name
+  comment    description
+  (No LDN field — HASHTAGS stores tag definitions, not dataset assignments.
+   Use DatasetWBListDatasetsForHashtag to find datasets by hashtag combination.)
 
 Examples:
-  # List all PMGL1 hashtags in mc23:
+  # List all PMGL1 hashtag names in mc23:
   SearchQuery -catalog="mc23_001:production" -entity="HASHTAGS"
-    -mql="SELECT DISTINCT `mc23_001:production`.`HASHTAGS`.`NAME`
-          WHERE `mc23_001:production`.`HASHTAGS`.`SCOPE` = 'PMGL1'"
+    -mql="SELECT DISTINCT NAME WHERE SCOPE = 'PMGL1'"
 
-  # Find mc20 EVNT datasets with PMGL1=WeakBoson (single-level filter):
+  # List PMGL3 status values (Baseline / Systematic / Alternative / ...):
   SearchQuery -catalog="mc15_001:production" -entity="HASHTAGS"
-    -mql="SELECT `mc15_001:production`.`HASHTAGS`.`LDN`
-          WHERE `mc15_001:production`.`HASHTAGS`.`NAME` = 'WeakBoson'
-          AND `mc15_001:production`.`HASHTAGS`.`SCOPE` = 'PMGL1'"
-  # Note: for multi-level hashtag filtering (e.g. WeakBoson/Vjets/Baseline),
-  # use DatasetWBListDatasetsForHashtag (see below) or the ami_search_by_hashtags tool.
+    -mql="SELECT DISTINCT NAME WHERE SCOPE = 'PMGL3'"
 
-  # Search for Zee datasets with DSID >= 700000:
+  # Search for Zee datasets in mc20:
   SearchQuery -catalog="mc15_001:production" -entity="dataset"
-    -mql="SELECT `mc15_001:production`.`dataset`.`logicalDatasetName`
-          WHERE `mc15_001:production`.`dataset`.`physicsShort` LIKE '%Zee%'
-          AND `mc15_001:production`.`dataset`.`amiStatus` = 'VALID'
+    -mql="SELECT logicalDatasetName, crossSection, genFiltEff
+          WHERE physicsShort LIKE '%Zee%'
+          AND amiStatus = 'VALID'
           LIMIT 50"
+
+  # For multi-level hashtag filtering (WeakBoson/Vjets/Baseline), use
+  # DatasetWBListDatasetsForHashtag (see below) or the ami_search_by_hashtags tool.
 
 ═══════════════════════════════════════════════════════════════
 DATASETWORKBOOK COMMANDS
 ═══════════════════════════════════════════════════════════════
 
 DatasetWBListDatasetsForHashtag — find all datasets with a given hashtag combo
-  Required: -logicalDatasetName="<scope>.*"  (scope pattern for the campaign)
-            -PMGL1="<l1>"
-  Optional: -PMGL2="<l2>"  -PMGL3="<l3>"  -PMGL4="<l4>"
+  Required: -scope="<levels>"   comma-separated levels, e.g. "PMGL1,PMGL2,PMGL3"
+            -name="<names>"     comma-separated hashtag names (same order as scope)
+            -operator="AND"     logical combination (AND is standard)
+  Returns rows with field: ldn  (the full Logical Dataset Name)
+  Note: returns datasets from ALL campaigns — filter the ldn field client-side
+        to restrict to a specific campaign (e.g. starts with "mc20_13TeV.")
   Example:
     DatasetWBListDatasetsForHashtag
-      -logicalDatasetName="mc20_13TeV.*"
-      -PMGL1="WeakBoson" -PMGL2="Vjets" -PMGL3="Baseline"
+      -scope="PMGL1,PMGL2,PMGL3"
+      -name="WeakBoson,Vjets,Baseline"
+      -operator="AND"
 
 DatasetWBListHashtags — reverse-lookup: find hashtags for a given dataset
   Required: -ldn="<full_ldn>"
+  Returns rows with fields: scope (PMGL1/PMGL2/...), name (hashtag value)
   Example:
     DatasetWBListHashtags
       -ldn="mc20_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.evgen.EVNT.e8351"

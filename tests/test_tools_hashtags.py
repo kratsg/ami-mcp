@@ -30,14 +30,7 @@ class TestAmiSearchByHashtags:
     ) -> None:
         result_mock = MagicMock()
         result_mock.get_rows.return_value = [
-            OrderedDict(
-                [
-                    (
-                        "logicalDatasetName",
-                        "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351",
-                    )
-                ]
-            )
+            OrderedDict([("ldn", "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351")])
         ]
 
         executed_commands: list[str] = []
@@ -60,10 +53,11 @@ class TestAmiSearchByHashtags:
         assert len(executed_commands) == 1
         cmd = executed_commands[0]
         assert "DatasetWBListDatasetsForHashtag" in cmd
-        assert "mc20_13TeV" in cmd
-        assert "WeakBoson" in cmd
-        assert "Vjets" in cmd
-        assert "Baseline" in cmd
+        assert '-scope="PMGL1,PMGL2,PMGL3"' in cmd
+        assert '-name="WeakBoson,Vjets,Baseline"' in cmd
+        assert '-operator="AND"' in cmd
+        # campaign scope is applied client-side, not in the AMI command
+        assert "mc20_13TeV" not in cmd
 
     async def test_returns_datasets(
         self,
@@ -72,14 +66,7 @@ class TestAmiSearchByHashtags:
     ) -> None:
         result_mock = MagicMock()
         result_mock.get_rows.return_value = [
-            OrderedDict(
-                [
-                    (
-                        "logicalDatasetName",
-                        "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351",
-                    )
-                ]
-            )
+            OrderedDict([("ldn", "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351")])
         ]
         with patch(
             "ami_mcp.tools.hashtags.run_ami_sync",

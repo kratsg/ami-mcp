@@ -38,7 +38,9 @@ def register(mcp: FastMCP) -> None:
             -mql="SELECT DISTINCT NAME WHERE SCOPE = 'PMGL1'"
 
         Args:
-            scope: ATLAS campaign scope (e.g. "mc20_13TeV", "mc23_13p6TeV").
+            scope: ATLAS campaign scope used to filter results client-side
+                (e.g. "mc20_13TeV", "mc23_13p6TeV"). The AMI command returns
+                datasets from all campaigns; this prefix-matches the ldn field.
             l1: PMGL1 hashtag (required, e.g. "WeakBoson").
             l2: PMGL2 hashtag (optional, e.g. "Vjets").
             l3: PMGL3 hashtag (optional, e.g. "Baseline").
@@ -46,22 +48,29 @@ def register(mcp: FastMCP) -> None:
         """
         client = ctx.request_context.lifespan_context["ami_client"]
 
-        cmd_parts = [
-            "DatasetWBListDatasetsForHashtag",
-            f'-logicalDatasetName="{scope}.*"',
-            f'-PMGL1="{l1}"',
-        ]
+        scope_levels = ["PMGL1"]
+        name_values = [l1]
         if l2:
-            cmd_parts.append(f'-PMGL2="{l2}"')
+            scope_levels.append("PMGL2")
+            name_values.append(l2)
         if l3:
-            cmd_parts.append(f'-PMGL3="{l3}"')
+            scope_levels.append("PMGL3")
+            name_values.append(l3)
         if l4:
-            cmd_parts.append(f'-PMGL4="{l4}"')
+            scope_levels.append("PMGL4")
+            name_values.append(l4)
 
-        command = " ".join(cmd_parts)
+        command = (
+            "DatasetWBListDatasetsForHashtag"
+            f' -scope="{",".join(scope_levels)}"'
+            f' -name="{",".join(name_values)}"'
+            ' -operator="AND"'
+        )
         try:
             result = await run_ami_sync(client.execute, command, format="dom_object")
             rows = result.get_rows()
+            # Filter to the requested campaign scope client-side
+            rows = [r for r in rows if r.get("ldn", "").startswith(f"{scope}.")]
             return format_ami_result(rows)
         except Exception as exc:  # noqa: BLE001
             return f"Error: {exc}"

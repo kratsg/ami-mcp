@@ -41,16 +41,20 @@ def test_ami_get_dataset_info_known_dataset() -> None:
 
 @pytest.mark.slow
 def test_ami_search_by_hashtags_weakboson() -> None:
-    """Searching for WeakBoson/Vjets/Baseline in mc20 returns datasets."""
+    """Searching for WeakBoson/Vjets/Baseline returns mc20 datasets."""
     client = pyAMI.client.Client("atlas-replica")
     cmd = (
         "DatasetWBListDatasetsForHashtag"
-        ' -logicalDatasetName="mc20_13TeV.*"'
-        ' -PMGL1="WeakBoson" -PMGL2="Vjets" -PMGL3="Baseline"'
+        ' -scope="PMGL1,PMGL2,PMGL3"'
+        ' -name="WeakBoson,Vjets,Baseline"'
+        ' -operator="AND"'
     )
     result = client.execute(cmd, format="dom_object")
     rows = result.get_rows()
     assert len(rows) > 0
+    # Filter to mc20 and verify at least one match
+    mc20_rows = [r for r in rows if r.get("ldn", "").startswith("mc20_13TeV.")]
+    assert len(mc20_rows) > 0
 
 
 @pytest.mark.slow
