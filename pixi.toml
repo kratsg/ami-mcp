@@ -24,6 +24,7 @@ hatch-vcs = ">=0.4"
 
 [package.run-dependencies]
 mcp = ">=1.0"
+python = "<3.12"   # ensures the host/build environment uses Python ≤3.11
 
 [pypi-dependencies]
 pyAMI-core = "*"
@@ -38,11 +39,11 @@ python = "<3.11,>=3.10"
 [feature.py311.dependencies]
 python = "<3.12,>=3.11"
 
-[feature.py312.dependencies]
-python = "<3.13,>=3.12"
-
-[feature.py313.dependencies]
-python = "<3.14,>=3.13"
+#[feature.py312.dependencies]
+#python = "<3.13,>=3.12"
+#
+#[feature.py313.dependencies]
+#python = "<3.14,>=3.13"
 
 [feature.test.dependencies]
 pytest = ">=9"
@@ -93,8 +94,8 @@ docs = ["docs"]
 dev = ["dev"]
 py310 = ["test", "py310"]
 py311 = ["test", "py311"]
-py312 = ["test", "py312"]
-py313 = ["test", "py313"]
+#py312 = ["test", "py312"]
+#py313 = ["test", "py313"]
 
 [tasks]
 # Composite tasks that span multiple features
