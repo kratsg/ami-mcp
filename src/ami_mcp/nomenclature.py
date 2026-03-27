@@ -188,10 +188,14 @@ Examples:
     -mql="SELECT DISTINCT NAME WHERE SCOPE = 'PMGL1'"
 
   # List PMGL3 status values (Baseline / Systematic / Alternative / ...):
-  SearchQuery -catalog="mc15_001:production" -entity="HASHTAGS"
+  # Note: HASHTAGS entity only works in mc21_001 and mc23_001 catalogs,
+  # NOT in mc15_001:production (returns a parse error).
+  SearchQuery -catalog="mc23_001:production" -entity="HASHTAGS"
     -mql="SELECT DISTINCT NAME WHERE SCOPE = 'PMGL3'"
 
-  # Search for Zee datasets in mc20:
+  # Search for Zee datasets in mc20 (filter on physicsShort, not logicalDatasetName):
+  # Note: LIKE on logicalDatasetName in mc15_001 catalog causes parse errors.
+  # Use physicsShort LIKE for dataset name patterns in mc15_001.
   SearchQuery -catalog="mc15_001:production" -entity="dataset"
     -mql="SELECT logicalDatasetName, crossSection, genFiltEff
           WHERE physicsShort LIKE '%Zee%'
@@ -200,6 +204,8 @@ Examples:
 
   # For multi-level hashtag filtering (WeakBoson/Vjets/Baseline), use
   # DatasetWBListDatasetsForHashtag (see below) or the ami_search_by_hashtags tool.
+  # Note: DatasetWBListDatasetsForHashtag only covers mc21 and mc23 datasets;
+  # mc20/mc16 datasets are not indexed in the hashtag workbook.
 
 ═══════════════════════════════════════════════════════════════
 DATASETWORKBOOK COMMANDS

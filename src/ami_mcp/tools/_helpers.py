@@ -29,9 +29,13 @@ def format_ami_result(rows: list[Any], max_rows: int = 100) -> str:
 
     if isinstance(display[0], (dict, OrderedDict)):
         keys = list(display[0].keys())
-        header = " | ".join(keys)
-        lines = [header, "-" * len(header)]
-        lines.extend(" | ".join(str(row.get(k, "")) for k in keys) for row in display)
+        header = "| " + " | ".join(keys) + " |"
+        separator = "| " + " | ".join("---" for _ in keys) + " |"
+        lines = [header, separator]
+        lines.extend(
+            "| " + " | ".join(str(row.get(k, "")) for k in keys) + " |"
+            for row in display
+        )
     else:
         lines = [str(r) for r in display]
 

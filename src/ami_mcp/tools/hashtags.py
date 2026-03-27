@@ -71,7 +71,9 @@ def register(mcp: FastMCP) -> None:
             rows = result.get_rows()
             # Filter to the requested campaign scope client-side
             rows = [r for r in rows if r.get("ldn", "").startswith(f"{scope}.")]
-            return format_ami_result(rows)
+            if not rows:
+                return "No results."
+            return "\n".join(r["ldn"] for r in rows)
         except Exception as exc:  # noqa: BLE001
             return f"Error: {exc}"
 

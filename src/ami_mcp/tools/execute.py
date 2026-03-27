@@ -29,8 +29,9 @@ def register(mcp: FastMCP) -> None:
             -mql="SELECT DISTINCT NAME WHERE SCOPE = 'PMGL1'"
 
           DatasetWBListDatasetsForHashtag
-            -logicalDatasetName="mc20_13TeV.*"
-            -PMGL1="WeakBoson" -PMGL2="Vjets" -PMGL3="Baseline"
+            -scope="PMGL1,PMGL2,PMGL3"
+            -name="WeakBoson,Vjets,Baseline"
+            -operator="AND"
 
           AMIGetDatasetInfo -logicalDatasetName="mc20_13TeV.700320.Sh_2211_Zee..."
 

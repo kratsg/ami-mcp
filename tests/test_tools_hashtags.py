@@ -77,6 +77,33 @@ class TestAmiSearchByHashtags:
 
         assert "700320" in result
 
+    async def test_returns_only_ldns(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[str]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        """Result should be plain LDN lines, not a table with id/catalog columns."""
+        result_mock = MagicMock()
+        result_mock.get_rows.return_value = [
+            OrderedDict(
+                [
+                    ("id", "12345"),
+                    ("catalog", "mc15_001:production"),
+                    ("ldn", "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351"),
+                ]
+            )
+        ]
+        with patch(
+            "ami_mcp.tools.hashtags.run_ami_sync",
+            new=AsyncMock(return_value=result_mock),
+        ):
+            fn = registered_tools["ami_search_by_hashtags"]
+            result = await fn(scope="mc20_13TeV", l1="WeakBoson", ctx=mock_ctx)
+
+        assert result == "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351"
+        assert "catalog" not in result
+        assert "12345" not in result
+
     async def test_returns_error_on_exception(
         self,
         registered_tools: dict[str, Callable[..., Awaitable[str]]],
