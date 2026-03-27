@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp import Context, FastMCP  # noqa: TC002
 
 _DEFAULT_PMGXSEC_PATH = "/cvmfs/atlas.cern.ch/repo/sw/database/GroupData/dev/PMGTools"
 

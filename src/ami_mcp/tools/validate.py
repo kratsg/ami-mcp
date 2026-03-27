@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp import Context, FastMCP  # noqa: TC002
 
 from ami_mcp.tools._helpers import run_ami_sync
 from ami_mcp.tools.xsecdb import _get_xsec_path, _parse_db_file

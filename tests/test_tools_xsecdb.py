@@ -46,7 +46,7 @@ def xsec_dir(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def registered_tools(_xsec_dir: Path) -> dict[str, Callable[..., Awaitable[str]]]:
+def registered_tools(xsec_dir: Path) -> dict[str, Callable[..., Awaitable[str]]]:  # noqa: ARG001
     mcp = FastMCP("test")
     register(mcp)
     return {tool.name: tool.fn for tool in mcp._tool_manager.list_tools()}

@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import warnings
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+
+# pyAMI/utils.py contains an invalid escape sequence ('\W+') that causes a
+# DeprecationWarning in Python 3.11 at import time. Suppress it here so that
+# "filterwarnings = error" in pyproject.toml does not break test collection.
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="pyAMI.*")
 
 
 @pytest.fixture
