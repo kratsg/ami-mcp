@@ -65,14 +65,27 @@ def register(mcp: FastMCP) -> None:
             filtered = {k: v for k, v in row.items() if k in _DATASET_INFO_FIELDS}
             display_rows = [filtered] if filtered else rows
             output = format_ami_result(display_rows)
-            return append_next_actions(
-                output,
-                [
-                    "Use `ami_get_dataset_prov` to trace the processing chain (EVNT→HITS→AOD→DAOD).",
-                    "Use `ami_get_physics_params` on the EVNT LDN for cross-section details.",
-                    "Use `ami_get_dataset_hashtags` on an EVNT LDN for PMG classification.",
-                ],
-            )
+
+            hints = [
+                "Use `ami_get_dataset_prov` to trace the processing chain (EVNT→HITS→AOD→DAOD).",
+                "Use `ami_get_physics_params` on the EVNT LDN for cross-section details.",
+                "Use `ami_get_dataset_hashtags` on an EVNT LDN for PMG classification.",
+            ]
+            # Contextual hints based on dataset status
+            ami_status = filtered.get("amiStatus", "")
+            n_files = filtered.get("nFiles", "")
+            if ami_status in ("TRASHED", "INVALID"):
+                hints.insert(
+                    0,
+                    f"This dataset is {ami_status}. Use `ami_list_datasets` to find a newer version.",
+                )
+            elif n_files == "0":
+                hints.insert(
+                    0,
+                    "nFiles=0: dataset may be deleted or not yet produced. Check prodsysStatus.",
+                )
+
+            return append_next_actions(output, hints)
         except Exception as exc:  # noqa: BLE001
             return format_error(
                 exc,
@@ -279,7 +292,14 @@ def register(mcp: FastMCP) -> None:
             result = await run_ami_sync(client.execute, command, format="dom_object")
             rows = result.get_rows()
         except Exception as exc:  # noqa: BLE001
-            return f"Error: {exc}"
+            return format_error(
+                exc,
+                hints=[
+                    "Use % as wildcard in patterns, e.g. '%Zee%'.",
+                    "Verify the project name (e.g. 'mc20_13TeV', 'mc23_13p6TeV').",
+                    "Use `ami_search_by_hashtags` to search by physics classification instead.",
+                ],
+            )
 
         output = format_ami_result(rows)
         if rows:

@@ -126,6 +126,16 @@ def register(mcp: FastMCP) -> None:
         """
         client = ctx.request_context.lifespan_context["ami_client"]
         command = f'DatasetWBListHashtags -ldn="{dataset}"'
+
+        # Warn if the input doesn't look like an EVNT dataset
+        prefix = ""
+        if ".evgen.EVNT." not in dataset:
+            prefix = (
+                "*Note: Hashtags are typically registered on EVNT datasets. "
+                "If this is a DAOD or AOD, use `ami_get_dataset_prov` to find the "
+                "parent EVNT LDN first.*\n\n"
+            )
+
         try:
             result = await run_ami_sync(client.execute, command, format="dom_object")
             rows = result.get_rows()
@@ -148,7 +158,7 @@ def register(mcp: FastMCP) -> None:
                 names = by_scope.get(level, [])
                 tag_str = ", ".join(names) if names else _none
                 lines.append(f"| {level} | {tag_str} |")
-            output = "\n".join(lines)
+            output = prefix + "\n".join(lines)
             return append_next_actions(
                 output,
                 [
@@ -157,4 +167,10 @@ def register(mcp: FastMCP) -> None:
                 ],
             )
         except Exception as exc:  # noqa: BLE001
-            return f"Error: {exc}"
+            return format_error(
+                exc,
+                hints=[
+                    "Hashtags are registered on EVNT LDNs (prodStep=evgen, dataType=EVNT).",
+                    "Use `ami_get_dataset_prov` to find the EVNT parent of a derived dataset.",
+                ],
+            )

@@ -6,7 +6,7 @@ from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP  # noqa: TC002
 
-from ami_mcp.tools._helpers import append_next_actions, run_ami_sync
+from ami_mcp.tools._helpers import append_next_actions, format_error, run_ami_sync
 
 
 def register(mcp: FastMCP) -> None:
@@ -35,6 +35,16 @@ def register(mcp: FastMCP) -> None:
         """
         client = ctx.request_context.lifespan_context["ami_client"]
         command = f'GetPhysicsParamsForDataset -logicalDatasetName="{dataset}"'
+
+        # Warn if the input doesn't look like an EVNT dataset
+        prefix = ""
+        if ".evgen.EVNT." not in dataset:
+            prefix = (
+                "*Note: Physics parameters are registered on EVNT datasets. "
+                "If this is a DAOD or AOD, use `ami_get_dataset_prov` to find the "
+                "parent EVNT LDN first.*\n\n"
+            )
+
         try:
             result = await run_ami_sync(client.execute, command, format="dom_object")
             rows = result.get_rows()
@@ -78,7 +88,7 @@ def register(mcp: FastMCP) -> None:
                 "| --- | --- |",
                 *table_rows,
             ]
-            output = "\n".join(lines)
+            output = prefix + "\n".join(lines)
             return append_next_actions(
                 output,
                 [
@@ -87,4 +97,10 @@ def register(mcp: FastMCP) -> None:
                 ],
             )
         except Exception as exc:  # noqa: BLE001
-            return f"Error: {exc}"
+            return format_error(
+                exc,
+                hints=[
+                    "This tool requires an EVNT LDN (prodStep=evgen, dataType=EVNT).",
+                    "Use `ami_get_dataset_prov` to find the EVNT parent of a DAOD/AOD.",
+                ],
+            )

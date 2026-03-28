@@ -135,4 +135,33 @@ class TestAmiGetPhysicsParams:
             fn = registered_tools["ami_get_physics_params"]
             result = await fn(dataset="bad.dataset", ctx=mock_ctx)
 
-        assert result.startswith("Error:")
+        assert "**Error**:" in result
+        assert "EVNT" in result
+
+    async def test_non_evnt_shows_warning(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[str]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        result_mock = MagicMock()
+        result_mock.get_rows.return_value = [
+            OrderedDict(
+                [
+                    ("paramName", "crossSection"),
+                    ("paramValue", "1.0"),
+                    ("units", "nb"),
+                ]
+            )
+        ]
+        with patch(
+            "ami_mcp.tools.physics.run_ami_sync",
+            new=AsyncMock(return_value=result_mock),
+        ):
+            fn = registered_tools["ami_get_physics_params"]
+            result = await fn(
+                dataset="mc20_13TeV.700320.Sh.deriv.DAOD_PHYS.e8351_s3681_p5855",
+                ctx=mock_ctx,
+            )
+
+        assert "Note:" in result
+        assert "EVNT" in result

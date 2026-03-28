@@ -155,3 +155,41 @@ class TestAmiGetDatasetHashtags:
 
         assert "WeakBoson" in result
         assert "Baseline" in result
+
+    async def test_non_evnt_shows_warning(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[str]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        rows = [OrderedDict([("SCOPE", "PMGL1"), ("NAME", "WeakBoson")])]
+        result_mock = MagicMock()
+        result_mock.get_rows.return_value = rows
+        with patch(
+            "ami_mcp.tools.hashtags.run_ami_sync",
+            new=AsyncMock(return_value=result_mock),
+        ):
+            fn = registered_tools["ami_get_dataset_hashtags"]
+            result = await fn(
+                dataset="mc20_13TeV.700320.Sh.deriv.DAOD_PHYS.e8351_s3681_p5855",
+                ctx=mock_ctx,
+            )
+
+        assert "Note:" in result
+        assert "EVNT" in result
+
+    async def test_returns_error_with_hints(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[str]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        with patch(
+            "ami_mcp.tools.hashtags.run_ami_sync",
+            new=AsyncMock(side_effect=RuntimeError("connection error")),
+        ):
+            fn = registered_tools["ami_get_dataset_hashtags"]
+            result = await fn(
+                dataset="mc20_13TeV.700320.Sh.evgen.EVNT.e8351", ctx=mock_ctx
+            )
+
+        assert "**Error**:" in result
+        assert "EVNT" in result

@@ -353,3 +353,102 @@ class TestAmiGetDatasetProv:
         # Should show same-distance nodes in parentheses and sorted alphanumerically
         assert "(HEPMC, HITS)" in result or "(HITS, HEPMC)" in result
         assert "## Nodes" in result
+
+
+class TestAmiGetDatasetInfoContextualHints:
+    async def test_trashed_dataset_hint(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[str]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        rows = [
+            OrderedDict(
+                [
+                    ("logicalDatasetName", "mc20_13TeV.700320.Sh.evgen.EVNT.e8351"),
+                    ("nFiles", "0"),
+                    ("amiStatus", "TRASHED"),
+                ]
+            )
+        ]
+        result_mock = _make_result_mock(rows)
+        with patch(
+            "ami_mcp.tools.datasets.run_ami_sync",
+            new=AsyncMock(return_value=result_mock),
+        ):
+            fn = registered_tools["ami_get_dataset_info"]
+            result = await fn(
+                dataset="mc20_13TeV.700320.Sh.evgen.EVNT.e8351", ctx=mock_ctx
+            )
+
+        assert "TRASHED" in result
+        assert "newer version" in result
+
+    async def test_nfiles_zero_hint(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[str]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        rows = [
+            OrderedDict(
+                [
+                    ("logicalDatasetName", "mc20_13TeV.700320.Sh.evgen.EVNT.e8351"),
+                    ("nFiles", "0"),
+                    ("amiStatus", "VALID"),
+                ]
+            )
+        ]
+        result_mock = _make_result_mock(rows)
+        with patch(
+            "ami_mcp.tools.datasets.run_ami_sync",
+            new=AsyncMock(return_value=result_mock),
+        ):
+            fn = registered_tools["ami_get_dataset_info"]
+            result = await fn(
+                dataset="mc20_13TeV.700320.Sh.evgen.EVNT.e8351", ctx=mock_ctx
+            )
+
+        assert "nFiles=0" in result
+
+
+class TestAmiListDatasets:
+    async def test_builds_correct_command_with_wildcards(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[str]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        """Command must not double-quote catalog/entity and must use LIMIT 0,N syntax."""
+        result_mock = _make_result_mock([])
+        executed_commands: list[str] = []
+
+        async def capture(_func, *args, **_kwargs):
+            executed_commands.append(str(args[0]))
+            return result_mock
+
+        with patch("ami_mcp.tools.datasets.run_ami_sync", new=capture):
+            fn = registered_tools["ami_list_datasets"]
+            await fn(patterns="%Zee%", project="mc23_13p6TeV", ctx=mock_ctx)
+
+        assert len(executed_commands) == 1
+        cmd = executed_commands[0]
+        # Catalog must not be double-quoted (would break % wildcards)
+        assert "-catalog=mc23_001:production" in cmd
+        assert "-entity=dataset" in cmd
+        # LIMIT syntax must be LIMIT 0,N not LIMIT N
+        assert "LIMIT 0," in cmd
+        # Wildcard must be preserved in the MQL
+        assert "%Zee%" in cmd
+
+    async def test_returns_error_with_hints(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[str]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        with patch(
+            "ami_mcp.tools.datasets.run_ami_sync",
+            new=AsyncMock(side_effect=RuntimeError("parse error")),
+        ):
+            fn = registered_tools["ami_list_datasets"]
+            result = await fn(patterns="%Zee%", project="mc23_13p6TeV", ctx=mock_ctx)
+
+        assert "**Error**:" in result
+        assert "wildcard" in result.lower() or "%" in result

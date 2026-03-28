@@ -61,4 +61,35 @@ class TestAmiGetAmiTag:
             fn = registered_tools["ami_get_ami_tag"]
             result = await fn(tag="e9999", ctx=mock_ctx)
 
-        assert result.startswith("Error:")
+        assert "**Error**:" in result
+        assert "Tag format" in result
+
+    async def test_tag_chain_uses_first_tag(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[str]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        """When a full tag chain is passed, look up only the first tag."""
+        rows = [
+            OrderedDict(
+                [("tagType", "e"), ("tagNumber", "8351"), ("description", "evgen")]
+            )
+        ]
+        result_mock = MagicMock()
+        result_mock.get_rows.return_value = rows
+
+        executed_commands: list[str] = []
+
+        async def capture(_func, *args, **_kwargs):
+            executed_commands.append(str(args[0]))
+            return result_mock
+
+        with patch("ami_mcp.tools.tags.run_ami_sync", new=capture):
+            fn = registered_tools["ami_get_ami_tag"]
+            result = await fn(tag="e8351_s3681_r13144", ctx=mock_ctx)
+
+        assert len(executed_commands) == 1
+        assert '-amiTag="e8351"' in executed_commands[0]
+        # Remaining tags hinted in next steps
+        assert "s3681" in result
+        assert "r13144" in result
