@@ -75,14 +75,19 @@ class TestAmiSearchByHashtags:
             fn = registered_tools["ami_search_by_hashtags"]
             result = await fn(scope="mc20_13TeV", l1="WeakBoson", ctx=mock_ctx)
 
-        assert "700320" in result
+        assert (
+            "| 700320 | Sh_2211_Zee | `mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351` |"
+            in result
+        )
+        assert "**Scope:** mc20_13TeV" in result
+        assert "## Matching Datasets" in result
 
     async def test_returns_only_ldns(
         self,
         registered_tools: dict[str, Callable[..., Awaitable[str]]],
         mock_ctx: MagicMock,
     ) -> None:
-        """Result should be LDN bullet list, not a table with id/catalog columns."""
+        """Result should be LDN table with dsid/physicsShort/ldn columns."""
         result_mock = MagicMock()
         result_mock.get_rows.return_value = [
             OrderedDict(
@@ -100,10 +105,15 @@ class TestAmiSearchByHashtags:
             fn = registered_tools["ami_search_by_hashtags"]
             result = await fn(scope="mc20_13TeV", l1="WeakBoson", ctx=mock_ctx)
 
-        assert "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351" in result
+        assert "| DSID | physicsShort | LDN |" in result
+        assert (
+            "| 700320 | Sh_2211_Zee | `mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351` |"
+            in result
+        )
+        # Keep these to ensure extraneous columns/fields are not included
         assert "catalog" not in result
         assert "12345" not in result
-        assert "## Matching Datasets" in result
+        assert "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351" in result
 
     async def test_returns_error_on_exception(
         self,
@@ -117,7 +127,8 @@ class TestAmiSearchByHashtags:
             fn = registered_tools["ami_search_by_hashtags"]
             result = await fn(scope="mc20_13TeV", l1="WeakBoson", ctx=mock_ctx)
 
-        assert result.startswith("Error:")
+        assert "**Error**:" in result  # still matches
+        assert "Check that the hashtag levels exist" in result  # optional hint check
 
 
 class TestAmiGetDatasetHashtags:

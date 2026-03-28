@@ -6,7 +6,7 @@ from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP  # noqa: TC002
 
-from ami_mcp.tools._helpers import append_next_actions, run_ami_sync
+from ami_mcp.tools._helpers import append_next_actions, format_error, run_ami_sync
 
 
 def register(mcp: FastMCP) -> None:
@@ -76,12 +76,21 @@ def register(mcp: FastMCP) -> None:
             if not rows:
                 return "No results."
             ldns = [r["ldn"] for r in rows]
-            lines = [
-                f"## Matching Datasets ({len(ldns)} found)",
-                "",
-                *[f"- `{ldn}`" for ldn in ldns],
-            ]
+
+            lines = [f"## Matching Datasets ({len(ldns)} found)"]
+            lines.append(f"**Scope:** {scope}")
+            lines.append("")
+            lines.append("| DSID | physicsShort | LDN |")
+            lines.append("|------|-------------|-----|")
+
+            for ldn in ldns:
+                parts = ldn.split(".")
+                dsid = parts[1] if len(parts) > 1 else ""
+                physics_short = parts[2] if len(parts) > 2 else ""
+                lines.append(f"| {dsid} | {physics_short} | `{ldn}` |")
+
             output = "\n".join(lines)
+
             return append_next_actions(
                 output,
                 [
@@ -91,7 +100,13 @@ def register(mcp: FastMCP) -> None:
                 ],
             )
         except Exception as exc:  # noqa: BLE001
-            return f"Error: {exc}"
+            return format_error(
+                exc,
+                hints=[
+                    "Check that the hashtag levels exist in AMI for this scope.",
+                    "Use `ami_execute` with -entity=HASHTAGS to list valid names.",
+                ],
+            )
 
     @mcp.tool()
     async def ami_get_dataset_hashtags(
