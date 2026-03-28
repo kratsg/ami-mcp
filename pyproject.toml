@@ -37,6 +37,7 @@ dependencies = [
 ami-mcp = "ami_mcp.cli:main"
 
 [project.urls]
+Documentation = "https://ami-mcp.readthedocs.io/"
 Homepage = "https://github.com/kratsg/ami-mcp"
 "Bug Tracker" = "https://github.com/kratsg/ami-mcp/issues"
 Discussions = "https://github.com/kratsg/ami-mcp/discussions"
