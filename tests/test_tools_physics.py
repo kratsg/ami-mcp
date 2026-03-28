@@ -32,11 +32,18 @@ class TestAmiGetPhysicsParams:
         result_mock.get_rows.return_value = [
             OrderedDict(
                 [
-                    ("crossSection", "1.234"),
-                    ("genFiltEff", "0.5"),
-                    ("kFactor", "1.0"),
+                    ("paramName", "crossSection"),
+                    ("paramValue", "1.234"),
+                    ("units", "nb"),
                 ]
-            )
+            ),
+            OrderedDict(
+                [
+                    ("paramName", "genFiltEff"),
+                    ("paramValue", "0.5"),
+                    ("units", "NULL"),
+                ]
+            ),
         ]
         with patch(
             "ami_mcp.tools.physics.run_ami_sync",
@@ -60,12 +67,32 @@ class TestAmiGetPhysicsParams:
         result_mock.get_rows.return_value = [
             OrderedDict(
                 [
-                    ("crossSection", "0.5"),
-                    ("genFiltEff", "0.25"),
-                    ("kFactor", "1.1"),
-                    ("contactPerson", "jsmith"),
+                    ("paramName", "crossSection"),
+                    ("paramValue", "0.5"),
+                    ("units", "nb"),
                 ]
-            )
+            ),
+            OrderedDict(
+                [
+                    ("paramName", "genFiltEff"),
+                    ("paramValue", "0.25"),
+                    ("units", "NULL"),
+                ]
+            ),
+            OrderedDict(
+                [
+                    ("paramName", "kFactor"),
+                    ("paramValue", "1.1"),
+                    ("units", "NULL"),
+                ]
+            ),
+            OrderedDict(
+                [
+                    ("paramName", "contactPerson"),
+                    ("paramValue", "jsmith"),
+                    ("units", "NULL"),
+                ]
+            ),
         ]
         with patch(
             "ami_mcp.tools.physics.run_ami_sync",

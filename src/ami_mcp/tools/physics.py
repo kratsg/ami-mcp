@@ -43,25 +43,31 @@ def register(mcp: FastMCP) -> None:
 
             # AMI may return multiple rows with the same keys (one per registered
             # parameter group). Deduplicate: keep first non-empty value per key.
-            merged: dict[str, str] = {}
+            params: dict[str, tuple[str, str]] = {}
             for row in rows:
-                for key, value in row.items():
-                    if key not in merged and value not in (None, "", "N/A"):
-                        merged[key] = str(value)
+                name = row.get("paramName", "")
+                value = row.get("paramValue", "")
+                units = row.get("units", "")
+                if name and value:
+                    params[name] = (value, units if units.lower() != "null" else "")
 
+            if not params:
+                return "No physics parameters found."
+
+            # Build table
             table_rows: list[str] = []
-            for key, value in merged.items():
-                if key == "crossSection":
+            for name, (value, units) in params.items():
+                if name == "crossSection":
                     try:
                         xs_nb = float(value)
                         xs_pb = xs_nb * 1000.0
                         table_rows.append(
-                            f"| crossSection | {value} nb ({xs_pb:.6g} pb) |"
+                            f"| crossSection | {value} {units} ({xs_pb:.6g} pb) |"
                         )
                     except (ValueError, TypeError):
-                        table_rows.append(f"| crossSection | {value} |")
+                        table_rows.append(f"| crossSection | {value} {units} |")
                 else:
-                    table_rows.append(f"| {key} | {value} |")
+                    table_rows.append(f"| {name} | {value} {units} |")
 
             if not table_rows:
                 return "No physics parameters found."
