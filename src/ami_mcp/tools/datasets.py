@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP  # noqa: TC002
@@ -84,6 +85,7 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool()
     async def ami_get_dataset_prov(
         dataset: str,
+        data_types: str | None = "EVNT,HITS,RDO,ESD,AOD,HEPMC,DAOD_",
         *,
         ctx: Context[Any, Any],
     ) -> str:
@@ -91,33 +93,140 @@ def register(mcp: FastMCP) -> None:
 
         Use this to trace a DAOD back to its EVNT, or to find derived datasets
         from an EVNT. Returns node and edge information showing the dataset's
-        processing lineage (e.g. EVNT → HITS → RDO → AOD → DAOD).
+        processing lineage (e.g., EVNT → HITS → RDO → AOD → DAOD).
+
+        The output includes:
+          - **Lineage Summary**: a compact chain of data types, grouped by
+            processing distance. Nodes at the same distance are shown in
+            parentheses. This provides a high-level view of the dataset's
+            lineage, e.g., which datasets are produced in parallel at a
+            given processing step.
+          - **Nodes**: table of individual datasets including:
+              - logicalDatasetName
+              - dataType
+              - distance (steps away from the input dataset)
+              - event count
+          - **Edges**: optional connections between datasets that show parent-child
+            relationships, only between surviving nodes after filtering.
+
+        **Note**: Server-side filtering by data type is not supported. Filtering
+        happens after retrieving all lineage nodes, so this command may take
+        longer for datasets with extensive provenance chains.
 
         Args:
             dataset: Full Logical Dataset Name (LDN).
+            data_types: Filter by data types, comma-separated (e.g. "EVNT,AOD,DAOD_PHYS").
+                Defaults to physics-relevant types and excludes LOG/TXT noise.
+                Prefix matching is supported (e.g. "DAOD_" keeps all DAOD_*).
+
+        Returns:
+            Formatted string with lineage summary, node table, and optional edges.
         """
         client = ctx.request_context.lifespan_context["ami_client"]
         command = f'AMIGetDatasetProv -logicalDatasetName="{dataset}"'
+
         try:
             result = await run_ami_sync(client.execute, command, format="dom_object")
             nodes = result.get_rows("node")
             edges = result.get_rows("edge")
-            parts: list[str] = []
-            if nodes:
-                parts.append("## Nodes")
-                parts.append(format_ami_result(nodes))
-            if edges:
-                parts.append("## Edges")
-                parts.append(format_ami_result(edges))
-            if not parts:
+
+            if not nodes:
                 return "No provenance found."
+
+            # ------------------------------------------------------------
+            # 1. Parse data_types filter
+            # ------------------------------------------------------------
+            allowed_exact: set[str] = set()
+            allowed_prefix: list[str] = []
+
+            if data_types:
+                for dt in [d.strip() for d in data_types.split(",") if d.strip()]:
+                    if dt.endswith("_"):
+                        allowed_prefix.append(dt)
+                    else:
+                        allowed_exact.add(dt)
+
+            def keep_type(dt: str | None) -> bool:
+                if not dt:
+                    return False
+                if dt in allowed_exact:
+                    return True
+                return any(dt.startswith(p) for p in allowed_prefix)
+
+            # ------------------------------------------------------------
+            # 2. Filter nodes
+            # ------------------------------------------------------------
+            filtered_nodes = [n for n in nodes if keep_type(n.get("dataType"))]
+            if not filtered_nodes:
+                return "No nodes remain after filtering."
+
+            # ------------------------------------------------------------
+            # 3. Filter edges (only between surviving nodes)
+            # ------------------------------------------------------------
+            allowed_ldns = {n["logicalDatasetName"] for n in filtered_nodes}
+            filtered_edges = [
+                e
+                for e in edges
+                if e["source"] in allowed_ldns and e["destination"] in allowed_ldns
+            ]
+
+            # ------------------------------------------------------------
+            # 4. Build lineage summary using distance
+            # ------------------------------------------------------------
+            # Group nodes by distance
+            nodes_by_distance: dict[int, list[dict[str, str]]] = defaultdict(list)
+            for n in filtered_nodes:
+                dist = n.get("distance", 0)
+                nodes_by_distance[dist].append(n)
+
+            # Build summary chain with parentheses for same-distance nodes
+            chain = []
+            for dist in sorted(nodes_by_distance):
+                dt_list = sorted(
+                    {
+                        n["dataType"]
+                        for n in nodes_by_distance[dist]
+                        if n.get("dataType")
+                    }
+                )
+                if len(dt_list) == 1:
+                    chain.append(dt_list[0])
+                else:
+                    chain.append(f"({', '.join(dt_list)})")
+
+            summary = " → ".join(chain) if chain else "No clear chain"
+
+            # ------------------------------------------------------------
+            # 5. Format output
+            # ------------------------------------------------------------
+            parts: list[str] = []
+
+            parts.append("## Lineage Summary")
+            parts.append(summary)
+
+            parts.append("\n## Nodes")
+            parts.append(format_ami_result(filtered_nodes))
+
+            if filtered_edges:
+                parts.append("\n## Edges")
+                parts.append(format_ami_result(filtered_edges))
+
             output = "\n\n".join(parts)
+
             return append_next_actions(
                 output,
                 ["Use `ami_get_dataset_info` on any node LDN for its metadata."],
             )
+
         except Exception as exc:  # noqa: BLE001
-            return f"Error: {exc}"
+            return format_error(
+                exc,
+                hints=[
+                    "Verify the LDN is complete: project.DSID.physicsShort.prodStep.dataType.tags",
+                    "Check that the dataset exists in AMI.",
+                    "Use `ami_list_datasets` to search for similar datasets.",
+                ],
+            )
 
     @mcp.tool()
     async def ami_list_datasets(
@@ -164,13 +273,14 @@ def register(mcp: FastMCP) -> None:
         if fields:
             select_fields += ", " + fields
 
-        mql = f"SELECT {select_fields} WHERE {' AND '.join(conditions)} LIMIT {limit}"
-        command = f'SearchQuery -catalog="{catalog}" -entity="dataset" -mql="{mql}"'
+        mql = f"SELECT {select_fields} WHERE {' AND '.join(conditions)} LIMIT 0,{limit}"
+        command = f'SearchQuery -catalog={catalog} -entity=dataset -mql="{mql}"'
         try:
             result = await run_ami_sync(client.execute, command, format="dom_object")
             rows = result.get_rows()
         except Exception as exc:  # noqa: BLE001
             return f"Error: {exc}"
+
         output = format_ami_result(rows)
         if rows:
             output = append_next_actions(
