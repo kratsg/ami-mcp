@@ -157,12 +157,12 @@ or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
 ### AMI queries
 
-| Tool                   | Description                                                |
-| ---------------------- | ---------------------------------------------------------- |
-| `ami_execute`          | Execute any AMI command string (primary power tool)        |
-| `ami_get_dataset_info` | Get metadata for a dataset (nFiles, nEvents, status, etc.) |
-| `ami_get_dataset_prov` | Get provenance chain (EVNT→HITS→RDO→AOD→DAOD)              |
-| `ami_list_datasets`    | Search for datasets matching a name pattern                |
+| Tool                   | Description                                                    |
+| ---------------------- | -------------------------------------------------------------- |
+| `ami_execute`          | Execute any AMI command string (primary power tool)            |
+| `ami_get_dataset_info` | Get metadata for a dataset (nFiles, nEvents, status, etc.)     |
+| `ami_get_dataset_prov` | Get provenance chain with lineage summary; filter by data type |
+| `ami_list_datasets`    | Search for datasets by name pattern (supports `%` wildcards)   |
 
 ### PMG hashtags
 
@@ -173,10 +173,10 @@ or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
 ### Physics metadata
 
-| Tool                     | Description                                             |
-| ------------------------ | ------------------------------------------------------- |
-| `ami_get_physics_params` | Get cross-section, filter efficiency, k-factor from AMI |
-| `ami_get_ami_tag`        | Get AMI processing tag info (e.g. e8351, p5855)         |
+| Tool                     | Description                                                               |
+| ------------------------ | ------------------------------------------------------------------------- |
+| `ami_get_physics_params` | Get cross-section (nb→pb converted), filter efficiency, k-factor from AMI |
+| `ami_get_ami_tag`        | Get AMI processing tag info; accepts tag chains like `e8351_s3681_r13144` |
 
 ### Cross-section database
 

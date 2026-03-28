@@ -66,7 +66,12 @@ from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
 
-from ami_mcp.tools._helpers import run_ami_sync, format_ami_result
+from ami_mcp.tools._helpers import (
+    append_next_actions,
+    format_ami_result,
+    format_error,
+    run_ami_sync,
+)
 
 
 def register(mcp: FastMCP) -> None:
@@ -81,9 +86,18 @@ def register(mcp: FastMCP) -> None:
                 format="dom_object",
             )
             rows = result.get_rows()
-            return format_ami_result(rows)
+            output = format_ami_result(rows)
+            return append_next_actions(
+                output, ["Use `ami_get_dataset_info` for full metadata."]
+            )
         except Exception as exc:  # noqa: BLE001
-            return f"Error: {exc}"
+            return format_error(
+                exc,
+                hints=[
+                    "Check the parameter format.",
+                    "Use `ami_execute` for raw queries.",
+                ],
+            )
 ```
 
 Key conventions:
@@ -91,8 +105,9 @@ Key conventions:
 - Tool names are prefixed with `ami_` to avoid collisions
 - `ctx` is keyword-only (after `*`) so optional parameters can have defaults
   before it
-- Errors are returned as text strings (`"Error: ..."`) — never raised as
-  exceptions
+- Errors are returned via `format_error(exc, hints=[...])` — never raised as
+  exceptions and never as bare `f"Error: {exc}"` strings
+- Use `append_next_actions(output, [...])` to suggest follow-up tool calls
 - `except Exception as exc:` lines carry `# noqa: BLE001` inline;
   `broad-exception-caught` is disabled globally in pylint (`pyproject.toml`)
 - All pyAMI calls go through `run_ami_sync()` — pyAMI's HTTP client is
@@ -177,26 +192,30 @@ AMIGetDatasetInfo -logicalDatasetName="mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.
 # Dataset provenance
 AMIGetDatasetProv -logicalDatasetName="..." -depth="10"
 
-# List datasets
-SearchQuery -catalog="mc15_001:production" -entity="dataset"
-  -mql="SELECT logicalDatasetName, nFiles, nEvents WHERE logicalDatasetName LIKE '%Zee%' LIMIT 100"
+# List datasets (note: no double-quotes around catalog/entity; LIMIT 0,N not LIMIT N)
+SearchQuery -catalog=mc15_001:production -entity=dataset
+  -mql="SELECT logicalDatasetName, nFiles, nEvents WHERE physicsShort LIKE '%Zee%' LIMIT 0,50"
 
-# AMI processing tag info
+# AMI processing tag info (pass single tag; split "e8351_s3681" → look up "e8351" first)
 AMIGetAMITagInfo -amiTag="e8351"
 
-# Physics parameters (cross-section, filter eff, k-factor)
+# Physics parameters (cross-section, filter eff, k-factor — pass EVNT LDN)
 GetPhysicsParamsForDataset -logicalDatasetName="..."
 
-# Hashtag classification
+# Hashtag classification (pass EVNT LDN)
 DatasetWBListHashtags -ldn="mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351"
 
 # Datasets for hashtag combination (returns all campaigns; filter ldn client-side)
 DatasetWBListDatasetsForHashtag -scope="PMGL1,PMGL2,PMGL3" -name="WeakBoson,Vjets,Baseline" -operator="AND"
 
-# General SearchQuery (LLM-formulated)
-SearchQuery -catalog="mc23_001:production" -entity="HASHTAGS"
+# General SearchQuery (LLM-formulated; no double-quotes around catalog/entity)
+SearchQuery -catalog=mc23_001:production -entity=HASHTAGS
   -mql="SELECT DISTINCT NAME WHERE SCOPE = 'PMGL1'"
 ```
+
+**Important SearchQuery quoting rule**: Do NOT double-quote `-catalog` or
+`-entity` values. Quoting them causes parse errors when the MQL contains `%`
+wildcards. Only `-mql` needs quoting. Use `LIMIT 0,N` syntax (not `LIMIT N`).
 
 Catalog names depend on scope:
 
