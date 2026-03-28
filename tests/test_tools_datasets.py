@@ -94,9 +94,26 @@ class TestAmiGetDatasetProv:
         mock_ctx: MagicMock,
     ) -> None:
         nodes = [
-            OrderedDict([("logicalDatasetName", "parent.evnt"), ("distance", "1")])
+            OrderedDict(
+                [
+                    ("logicalDatasetName", "parent.EVNT"),
+                    ("dataType", "EVNT"),
+                    ("distance", 1),
+                    ("events", 1000),
+                ]
+            ),
+            OrderedDict(
+                [
+                    ("logicalDatasetName", "child.HITS"),
+                    ("dataType", "HITS"),
+                    ("distance", 2),
+                    ("events", 100),
+                ]
+            ),
         ]
-        edges = [OrderedDict([("input", "parent.evnt"), ("output", "child.hits")])]
+        edges = [
+            OrderedDict([("source", "parent.EVNT"), ("destination", "child.HITS")])
+        ]
         result_mock = _make_result_mock([], node_rows=nodes, edge_rows=edges)
         with patch(
             "ami_mcp.tools.datasets.run_ami_sync",
@@ -108,7 +125,7 @@ class TestAmiGetDatasetProv:
             )
 
         assert "Nodes" in result
-        assert "parent.evnt" in result
+        assert "parent.EVNT" in result
 
     async def test_no_provenance_message(
         self,
@@ -124,3 +141,215 @@ class TestAmiGetDatasetProv:
             result = await fn(dataset="some.dataset", ctx=mock_ctx)
 
         assert "No provenance" in result
+
+    async def test_basic_chain(self, registered_tools, mock_ctx):
+        nodes = [
+            OrderedDict(
+                [
+                    ("logicalDatasetName", "parent.EVNT"),
+                    ("dataType", "EVNT"),
+                    ("distance", 0),
+                    ("events", 1000),
+                ]
+            ),
+            OrderedDict(
+                [
+                    ("logicalDatasetName", "child.HITS"),
+                    ("dataType", "HITS"),
+                    ("distance", 1),
+                    ("events", 100),
+                ]
+            ),
+            OrderedDict(
+                [
+                    ("logicalDatasetName", "grandchild.AOD"),
+                    ("dataType", "AOD"),
+                    ("distance", 2),
+                    ("events", 50),
+                ]
+            ),
+        ]
+        edges = [
+            OrderedDict([("source", "parent.EVNT"), ("destination", "child.HITS")]),
+            OrderedDict([("source", "child.HITS"), ("destination", "grandchild.AOD")]),
+        ]
+        result_mock = _make_result_mock([], nodes, edges)
+
+        with patch(
+            "ami_mcp.tools.datasets.run_ami_sync",
+            new=AsyncMock(return_value=result_mock),
+        ):
+            fn = registered_tools["ami_get_dataset_prov"]
+            result = await fn(dataset="some.dataset", ctx=mock_ctx)
+
+        assert "## Lineage Summary" in result
+        assert "EVNT → HITS → AOD" in result
+        assert "## Nodes" in result
+        assert "parent.EVNT" in result
+        assert "child.HITS" in result
+        assert "grandchild.AOD" in result
+        assert "## Edges" in result
+        # check table formatting
+        assert "| source | destination |" in result
+        assert "parent.EVNT" in result
+        assert "child.HITS" in result
+
+    async def test_data_types_filter_exact(self, registered_tools, mock_ctx):
+        nodes = [
+            OrderedDict(
+                [
+                    ("logicalDatasetName", "n1.EVNT"),
+                    ("dataType", "EVNT"),
+                    ("distance", 0),
+                    ("events", 100),
+                ]
+            ),
+            OrderedDict(
+                [
+                    ("logicalDatasetName", "n2.HITS"),
+                    ("dataType", "HITS"),
+                    ("distance", 1),
+                    ("events", 50),
+                ]
+            ),
+        ]
+        edges = [OrderedDict([("source", "n1.EVNT"), ("destination", "n2.HITS")])]
+        result_mock = _make_result_mock([], nodes, edges)
+
+        with patch(
+            "ami_mcp.tools.datasets.run_ami_sync",
+            new=AsyncMock(return_value=result_mock),
+        ):
+            fn = registered_tools["ami_get_dataset_prov"]
+            result = await fn(dataset="ds", data_types="EVNT", ctx=mock_ctx)
+
+        assert "HITS" not in result
+        assert "EVNT" in result
+        assert "No nodes remain after filtering" not in result
+
+    async def test_data_types_filter_prefix(self, registered_tools, mock_ctx):
+        nodes = [
+            OrderedDict(
+                [
+                    ("logicalDatasetName", "d1.DAOD_PHYS"),
+                    ("dataType", "DAOD_PHYS"),
+                    ("distance", 0),
+                    ("events", 1000),
+                ]
+            ),
+            OrderedDict(
+                [
+                    ("logicalDatasetName", "d2.DAOD_FTAG1"),
+                    ("dataType", "DAOD_FTAG1"),
+                    ("distance", 1),
+                    ("events", 500),
+                ]
+            ),
+            OrderedDict(
+                [
+                    ("logicalDatasetName", "d3.AOD"),
+                    ("dataType", "AOD"),
+                    ("distance", 2),
+                    ("events", 100),
+                ]
+            ),
+        ]
+        edges = [
+            OrderedDict([("source", "d1.DAOD_PHYS"), ("destination", "d2.DAOD_FTAG1")]),
+            OrderedDict([("source", "d2.DAOD_FTAG1"), ("destination", "d3.AOD")]),
+        ]
+        result_mock = _make_result_mock([], nodes, edges)
+
+        with patch(
+            "ami_mcp.tools.datasets.run_ami_sync",
+            new=AsyncMock(return_value=result_mock),
+        ):
+            fn = registered_tools["ami_get_dataset_prov"]
+            result = await fn(dataset="ds", data_types="DAOD_", ctx=mock_ctx)
+
+        # Only DAOD_PHYS and DAOD_FTAG1 should appear
+        assert "DAOD_PHYS" in result
+        assert "DAOD_FTAG1" in result
+        assert ".AOD" not in result
+
+    async def test_no_nodes_found(self, registered_tools, mock_ctx):
+        result_mock = _make_result_mock([])
+        with patch(
+            "ami_mcp.tools.datasets.run_ami_sync",
+            new=AsyncMock(return_value=result_mock),
+        ):
+            fn = registered_tools["ami_get_dataset_prov"]
+            result = await fn(dataset="ds", ctx=mock_ctx)
+        assert "No provenance found." in result
+
+    async def test_edge_pruning_after_filter(self, registered_tools, mock_ctx):
+        nodes = [
+            OrderedDict(
+                [
+                    ("logicalDatasetName", "n1.EVNT"),
+                    ("dataType", "EVNT"),
+                    ("distance", 0),
+                    ("events", 100),
+                ]
+            ),
+            OrderedDict(
+                [
+                    ("logicalDatasetName", "n2.HITS"),
+                    ("dataType", "HITS"),
+                    ("distance", 1),
+                    ("events", 50),
+                ]
+            ),
+        ]
+        edges = [OrderedDict([("source", "n1.EVNT"), ("destination", "n2.HITS")])]
+        result_mock = _make_result_mock([], nodes, edges)
+        with patch(
+            "ami_mcp.tools.datasets.run_ami_sync",
+            new=AsyncMock(return_value=result_mock),
+        ):
+            fn = registered_tools["ami_get_dataset_prov"]
+            result = await fn(dataset="ds", data_types="EVNT", ctx=mock_ctx)
+
+        # Edge between EVNT → HITS should be removed after filtering
+        assert "HITS" not in result
+        assert "## Edges" not in result
+
+    async def test_multiple_nodes_same_distance(self, registered_tools, mock_ctx):
+        nodes = [
+            OrderedDict(
+                [
+                    ("logicalDatasetName", "n1.EVNT"),
+                    ("dataType", "EVNT"),
+                    ("distance", 0),
+                    ("events", 100),
+                ]
+            ),
+            OrderedDict(
+                [
+                    ("logicalDatasetName", "n2.HITS"),
+                    ("dataType", "HITS"),
+                    ("distance", 1),
+                    ("events", 50),
+                ]
+            ),
+            OrderedDict(
+                [
+                    ("logicalDatasetName", "n3.HEPMC"),
+                    ("dataType", "HEPMC"),
+                    ("distance", 1),
+                    ("events", 25),
+                ]
+            ),
+        ]
+        edges: list[dict[str, str]] = []
+        result_mock = _make_result_mock([], nodes, edges)
+        with patch(
+            "ami_mcp.tools.datasets.run_ami_sync",
+            new=AsyncMock(return_value=result_mock),
+        ):
+            fn = registered_tools["ami_get_dataset_prov"]
+            result = await fn(dataset="ds", ctx=mock_ctx)
+
+        # Should show same-distance nodes in parentheses and sorted alphanumerically
+        assert "(HEPMC, HITS)" in result or "(HITS, HEPMC)" in result
+        assert "## Nodes" in result
