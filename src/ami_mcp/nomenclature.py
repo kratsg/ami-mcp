@@ -138,8 +138,8 @@ Built-in functions:
   Time:        TIMESTAMP  AMI_TIMESTAMP  AMI_DATE  AMI_TIME
   JSON:        JSON_<key>
 
-LIMIT syntax:  LIMIT 50        -- first 50 rows
-               LIMIT 50 OFFSET 200  -- rows 201-250
+LIMIT syntax:  LIMIT 0,50      -- first 50 rows  (LIMIT N alone causes parse errors)
+               LIMIT 200,50   -- rows 201-250
 
 Comments:  -- this is a comment (to end of line)
 
@@ -147,8 +147,11 @@ Comments:  -- this is a comment (to end of line)
 SEARCHQUERY — General MQL queries
 ═══════════════════════════════════════════════════════════════
 Syntax:
-  SearchQuery -catalog="<catalog>" -entity="<entity>"
+  SearchQuery -catalog=<catalog> -entity=<entity>
               -mql="<mql_select_statement>"
+
+  Note: Do NOT quote -catalog or -entity values. Quoting them causes parse
+  errors when the MQL contains % wildcards. Only -mql needs quoting.
 
 Catalogs:
   mc15_001:production    mc16 + mc20 evgen datasets
@@ -184,23 +187,23 @@ Field reference for 'HASHTAGS' entity:
 
 Examples:
   # List all PMGL1 hashtag names in mc23:
-  SearchQuery -catalog="mc23_001:production" -entity="HASHTAGS"
+  SearchQuery -catalog=mc23_001:production -entity=HASHTAGS
     -mql="SELECT DISTINCT NAME WHERE SCOPE = 'PMGL1'"
 
   # List PMGL3 status values (Baseline / Systematic / Alternative / ...):
   # Note: HASHTAGS entity only works in mc21_001 and mc23_001 catalogs,
   # NOT in mc15_001:production (returns a parse error).
-  SearchQuery -catalog="mc23_001:production" -entity="HASHTAGS"
+  SearchQuery -catalog=mc23_001:production -entity=HASHTAGS
     -mql="SELECT DISTINCT NAME WHERE SCOPE = 'PMGL3'"
 
   # Search for Zee datasets in mc20 (filter on physicsShort, not logicalDatasetName):
   # Note: LIKE on logicalDatasetName in mc15_001 catalog causes parse errors.
   # Use physicsShort LIKE for dataset name patterns in mc15_001.
-  SearchQuery -catalog="mc15_001:production" -entity="dataset"
+  SearchQuery -catalog=mc15_001:production -entity=dataset
     -mql="SELECT logicalDatasetName, crossSection, genFiltEff
           WHERE physicsShort LIKE '%Zee%'
           AND amiStatus = 'VALID'
-          LIMIT 50"
+          LIMIT 0,50"
 
   # For multi-level hashtag filtering (WeakBoson/Vjets/Baseline), use
   # DatasetWBListDatasetsForHashtag (see below) or the ami_search_by_hashtags tool.

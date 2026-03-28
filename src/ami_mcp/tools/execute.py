@@ -26,7 +26,7 @@ def register(mcp: FastMCP) -> None:
         formatted results.
 
         Common command patterns:
-          SearchQuery -catalog="mc23_001:production" -entity="HASHTAGS"
+          SearchQuery -catalog=mc23_001:production -entity=HASHTAGS
             -mql="SELECT DISTINCT NAME WHERE SCOPE = 'PMGL1'"
 
           DatasetWBListDatasetsForHashtag

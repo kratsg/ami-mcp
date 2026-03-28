@@ -35,7 +35,7 @@ def register(mcp: FastMCP) -> None:
           PMGL4  Generator detail (e.g. Sherpa_2211, Powheg_Pythia8)
 
         To list available hashtags at any level, use ami_execute with:
-          SearchQuery -catalog="mc23_001:production" -entity="HASHTAGS"
+          SearchQuery -catalog=mc23_001:production -entity=HASHTAGS
             -mql="SELECT DISTINCT NAME WHERE SCOPE = 'PMGL1'"
 
         Args:
