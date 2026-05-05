@@ -5,6 +5,6 @@ ami-mcp: MCP Server for ATLAS AMI metadata interface
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+from ami_mcp._version import version as __version__
 
 __all__ = ["__version__"]
