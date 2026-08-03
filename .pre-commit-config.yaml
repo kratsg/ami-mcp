@@ -36,21 +36,21 @@ repos:
       - id: rst-inline-touching-normal
 
   - repo: https://github.com/rbubley/mirrors-prettier
-    rev: "v3.8.1"
+    rev: "v3.9.6"
     hooks:
       - id: prettier
         types_or: [yaml, markdown, html, css, scss, javascript, json]
         args: [--prose-wrap=always]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: "v0.15.7"
+    rev: "v0.16.1"
     hooks:
       - id: ruff-check
         args: ["--fix", "--show-fixes"]
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: "v1.19.1"
+    rev: "v2.3.0"
     hooks:
       - id: mypy
         files: src|tests
@@ -60,7 +60,7 @@ repos:
           - mcp
 
   - repo: https://github.com/codespell-project/codespell
-    rev: "v2.4.2"
+    rev: "v2.4.3"
     hooks:
       - id: codespell
         additional_dependencies:
@@ -86,14 +86,14 @@ repos:
         additional_dependencies: ["validate-pyproject-schema-store[all]"]
 
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: "0.37.0"
+    rev: "0.37.4"
     hooks:
       - id: check-dependabot
       - id: check-github-workflows
       - id: check-readthedocs
 
   - repo: https://github.com/rstcheck/rstcheck
-    rev: "v6.2.5"
+    rev: "v6.3.0"
     hooks:
       - id: rstcheck
         additional_dependencies: ["rstcheck[sphinx,toml]"]
