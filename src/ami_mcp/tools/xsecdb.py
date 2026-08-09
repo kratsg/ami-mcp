@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP  # noqa: TC002
+
+log = logging.getLogger()
 
 _DEFAULT_PMGXSEC_PATH = "/cvmfs/atlas.cern.ch/repo/sw/database/GroupData/dev/PMGTools"
 
@@ -198,7 +201,8 @@ def register(mcp: FastMCP) -> None:
                     if rows:
                         formatted = _format_xsec_rows(rows)
                         all_sections.append(f"### {each_db.name}\n\n{formatted}")
-                except Exception:  # noqa: BLE001, PERF203
+                except Exception:  # noqa: PERF203
+                    log.exception("Uncaught exception")
                     continue
             if not all_sections:
                 return f"No matching entries found for DSID {dsid} in any database."
