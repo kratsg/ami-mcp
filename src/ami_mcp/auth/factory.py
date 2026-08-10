@@ -52,6 +52,7 @@ class EnvBasedClientFactory(AmiClientFactory):
     """
 
     def __init__(self, client: Any = None, *, endpoint: str | None = None) -> None:
+        """Select client= for a shared instance or endpoint= for per-call construction."""
         if (client is None) == (endpoint is None):
             msg = "provide exactly one of client= or endpoint="
             raise ValueError(msg)

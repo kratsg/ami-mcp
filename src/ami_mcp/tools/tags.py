@@ -31,7 +31,6 @@ def register(mcp: MCPServer) -> None:
         Args:
             tag: AMI tag string, e.g. "e8351", "s3681", "p5855".
         """
-
         # Accept a full tag chain (e.g. "e8351_s3681_r13144") — look up the first tag
         # and note the remaining ones so the caller can look them up separately.
         first_tag = tag.split("_", maxsplit=1)[0]

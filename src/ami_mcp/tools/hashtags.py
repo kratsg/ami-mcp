@@ -52,7 +52,6 @@ def register(mcp: MCPServer) -> None:
                 The AMI command returns datasets from all campaigns; this
                 prefix-matches the ldn field.
         """
-
         scope_levels = ["PMGL1"]
         name_values = [l1]
         if l2:

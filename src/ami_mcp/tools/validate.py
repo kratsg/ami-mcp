@@ -124,7 +124,6 @@ def register(mcp: MCPServer) -> None:
             database: Optional PMG xsec DB file or campaign (e.g. "mc16", "mc23").
                 If provided, cross-section metadata is compared against the DB.
         """
-
         ldn_list = [ln.strip() for ln in datasets.splitlines() if ln.strip()]
         if not ldn_list:
             return "Error: no dataset LDNs provided."
