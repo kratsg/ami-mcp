@@ -109,6 +109,22 @@ async def run_ami_sync(func: Any, *args: Any, **kwargs: Any) -> Any:
     return await asyncio.to_thread(func, *args, **kwargs)
 
 
+def get_ami_client(ctx: Any) -> Any:
+    """Return the pyAMI client for the current request.
+
+    Delegates to the ``AmiClientFactory`` stored in the lifespan context, so
+    tools stay agnostic of whether the client is process-wide (stdio) or
+    provisioned per request (HTTP modes).
+
+    Args:
+        ctx: The MCP request Context.
+
+    Returns:
+        A pyAMI client ready for client.execute() calls.
+    """
+    return ctx.request_context.lifespan_context["client_factory"].get_client(ctx)
+
+
 # Maps scope strings (e.g. "mc20_13TeV") to their AMI evgen catalog names.
 # mc16 and mc20 evgen datasets are stored in the mc15 catalog because they
 # were generated with mc15-era job options.

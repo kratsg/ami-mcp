@@ -6,7 +6,12 @@ from typing import Any
 
 from mcp.server.mcpserver import Context, MCPServer  # noqa: TC002
 
-from ami_mcp.tools._helpers import append_next_actions, format_error, run_ami_sync
+from ami_mcp.tools._helpers import (
+    append_next_actions,
+    format_error,
+    get_ami_client,
+    run_ami_sync,
+)
 
 
 def register(mcp: MCPServer) -> None:
@@ -33,7 +38,7 @@ def register(mcp: MCPServer) -> None:
                 If you only have a DAOD or other derived LDN, use ami_get_dataset_prov
                 first to find the parent EVNT dataset.
         """
-        client = ctx.request_context.lifespan_context["ami_client"]
+        client = get_ami_client(ctx)
         command = f'GetPhysicsParamsForDataset -logicalDatasetName="{dataset}"'
 
         # Warn if the input doesn't look like an EVNT dataset

@@ -6,7 +6,12 @@ from typing import Any
 
 from mcp.server.mcpserver import Context, MCPServer  # noqa: TC002
 
-from ami_mcp.tools._helpers import format_ami_result, format_error, run_ami_sync
+from ami_mcp.tools._helpers import (
+    format_ami_result,
+    format_error,
+    get_ami_client,
+    run_ami_sync,
+)
 
 
 def register(mcp: MCPServer) -> None:
@@ -41,7 +46,7 @@ def register(mcp: MCPServer) -> None:
         Args:
             command: AMI command string (see ami://query-language resource).
         """
-        client = ctx.request_context.lifespan_context["ami_client"]
+        client = get_ami_client(ctx)
         try:
             result = await run_ami_sync(client.execute, command, format="dom_object")
             rows = result.get_rows()
