@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP  # noqa: TC002
+from mcp.server.mcpserver import Context, MCPServer  # noqa: TC002
 
 from ami_mcp.tools._helpers import format_ami_result, format_error, run_ami_sync
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer) -> None:
     """Register the ami_execute tool."""
 
     @mcp.tool()

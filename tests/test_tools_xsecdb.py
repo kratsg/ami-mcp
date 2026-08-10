@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 from ami_mcp.tools.xsecdb import _parse_db_file, register
 
@@ -47,7 +47,7 @@ def xsec_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def registered_tools(xsec_dir: Path) -> dict[str, Callable[..., Awaitable[str]]]:  # noqa: ARG001
-    mcp = FastMCP("test")
+    mcp = MCPServer("test")
     register(mcp)
     return {tool.name: tool.fn for tool in mcp._tool_manager.list_tools()}
 

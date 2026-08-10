@@ -24,7 +24,7 @@ hatchling = ">=1.25"
 hatch-vcs = ">=0.4"
 
 [package.run-dependencies]
-mcp = ">=1.0,<2"
+mcp = ">=2.0.0,<3"
 ca-policy-lcg = "*"
 voms = "*"
 voms-lsc = "*"

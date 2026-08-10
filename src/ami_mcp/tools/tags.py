@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP  # noqa: TC002
+from mcp.server.mcpserver import Context, MCPServer  # noqa: TC002
 
 from ami_mcp.tools._helpers import (
     append_next_actions,
@@ -14,7 +14,7 @@ from ami_mcp.tools._helpers import (
 )
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer) -> None:
     """Register AMI tag info tools."""
 
     @mcp.tool()

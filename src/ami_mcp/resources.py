@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from mcp.server.fastmcp import FastMCP  # noqa: TC002
+from mcp.server.mcpserver import MCPServer  # noqa: TC002
 
 from ami_mcp.nomenclature import (
     AMI_QUERY_LANGUAGE,
@@ -11,7 +11,7 @@ from ami_mcp.nomenclature import (
 )
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer) -> None:
     """Register documentation resources with the MCP server."""
 
     @mcp.resource(

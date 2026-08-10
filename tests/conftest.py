@@ -18,7 +18,7 @@ def mock_ami_client() -> MagicMock:
 
 @pytest.fixture
 def mock_ctx(mock_ami_client: MagicMock) -> MagicMock:
-    """Return a mock FastMCP Context with an ami_client in lifespan context."""
+    """Return a mock MCPServer Context with an ami_client in lifespan context."""
     ctx: MagicMock = MagicMock()
     ctx.request_context.lifespan_context = {"ami_client": mock_ami_client}
     return ctx
