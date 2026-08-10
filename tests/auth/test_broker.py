@@ -12,12 +12,12 @@ import pytest
 
 af_credentials = pytest.importorskip("af_credentials")
 
-from af_credentials.proxy import (  # noqa: E402
+from af_credentials.proxy import (
     ProxyHandle,
     ProxyNotAvailableError,
 )
 
-from ami_mcp.auth.broker import (  # noqa: E402
+from ami_mcp.auth.broker import (
     BrokerProxyClientFactory,
     extract_bearer,
 )
@@ -134,7 +134,5 @@ class TestBrokerProxyClientFactory:
         assert proxy_client.seen_bearers == []
 
     def test_close_is_safe(self) -> None:
-        factory = BrokerProxyClientFactory(
-            _FakeProxyClient(), endpoint="atlas-replica"
-        )
+        factory = BrokerProxyClientFactory(_FakeProxyClient(), endpoint="atlas-replica")
         factory.close()
