@@ -1,26 +1,36 @@
 """Factories that provide a pyAMI client for the current request.
 
 Tools never construct or hold a pyAMI client directly; they call
-``get_ami_client(ctx)`` (see ``ami_mcp.tools._helpers``), which delegates to
-the factory stored in the lifespan context. The factory decides whether that
-means one process-wide client (stdio) or a per-request client (HTTP modes,
-where per-user credentials or concurrency demand it).
+``run_ami_command(ctx, ...)`` (see ``ami_mcp.tools._helpers``), which asks
+the factory stored in the lifespan context for a client scoped to that one
+call. The factory decides what that means: one process-wide client (stdio),
+a per-request client (HTTP modes, where concurrency demands it), or a
+per-call client backed by a redeemed user credential that must be disposed
+of as soon as the call finishes (broker mode).
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING, Any
 
 import pyAMI.client
 
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
 
 class AmiClientFactory(ABC):
-    """Contract for obtaining a pyAMI client for the current request."""
+    """Contract for obtaining a pyAMI client scoped to the current request."""
 
     @abstractmethod
     def get_client(self, ctx: Any) -> Any:
-        """Return a pyAMI client appropriate for the request in *ctx*."""
+        """Return an async context manager yielding a pyAMI client.
+
+        The client (and any credential backing it) is only guaranteed valid
+        inside the ``async with`` block.
+        """
 
     @abstractmethod
     def close(self) -> None:
@@ -32,7 +42,7 @@ class EnvBasedClientFactory(AmiClientFactory):
 
     Two modes, selected at construction:
 
-    - ``client=...``: always return that single shared instance. Used for
+    - ``client=...``: always yield that single shared instance. Used for
       stdio, where requests are serial.
     - ``endpoint=...``: build a fresh ``pyAMI.client.Client`` on every call.
       Used for HTTP modes — pyAMI's HttpClient keeps connection state on
@@ -48,11 +58,16 @@ class EnvBasedClientFactory(AmiClientFactory):
         self._client = client
         self._endpoint = endpoint
 
-    def get_client(self, ctx: Any) -> Any:  # noqa: ARG002
-        """Return the shared client, or a fresh one in endpoint mode."""
+    @asynccontextmanager
+    async def _scoped(self) -> AsyncIterator[Any]:
         if self._client is not None:
-            return self._client
-        return pyAMI.client.Client(self._endpoint)
+            yield self._client
+        else:
+            yield pyAMI.client.Client(self._endpoint)
+
+    def get_client(self, ctx: Any) -> Any:  # noqa: ARG002
+        """Return a context manager over the shared or per-call client."""
+        return self._scoped()
 
     def close(self) -> None:
         """Nothing to release: pyAMI clients hold no persistent connections."""

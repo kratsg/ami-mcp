@@ -10,8 +10,7 @@ from ami_mcp.tools._helpers import (
     append_next_actions,
     format_ami_result,
     format_error,
-    get_ami_client,
-    run_ami_sync,
+    run_ami_command,
 )
 
 
@@ -32,7 +31,6 @@ def register(mcp: MCPServer) -> None:
         Args:
             tag: AMI tag string, e.g. "e8351", "s3681", "p5855".
         """
-        client = get_ami_client(ctx)
 
         # Accept a full tag chain (e.g. "e8351_s3681_r13144") — look up the first tag
         # and note the remaining ones so the caller can look them up separately.
@@ -41,7 +39,7 @@ def register(mcp: MCPServer) -> None:
 
         command = f'AMIGetAMITagInfo -amiTag="{first_tag}"'
         try:
-            result = await run_ami_sync(client.execute, command, format="dom_object")
+            result = await run_ami_command(ctx, command)
             rows = result.get_rows("amiTagInfo")
         except Exception as exc:  # noqa: BLE001
             return format_error(

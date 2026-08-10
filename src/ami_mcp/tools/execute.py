@@ -9,8 +9,7 @@ from mcp.server.mcpserver import Context, MCPServer  # noqa: TC002
 from ami_mcp.tools._helpers import (
     format_ami_result,
     format_error,
-    get_ami_client,
-    run_ami_sync,
+    run_ami_command,
 )
 
 
@@ -46,9 +45,8 @@ def register(mcp: MCPServer) -> None:
         Args:
             command: AMI command string (see ami://query-language resource).
         """
-        client = get_ami_client(ctx)
         try:
-            result = await run_ami_sync(client.execute, command, format="dom_object")
+            result = await run_ami_command(ctx, command)
             rows = result.get_rows()
             return format_ami_result(rows)
         except Exception as exc:  # noqa: BLE001

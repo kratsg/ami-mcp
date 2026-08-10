@@ -35,12 +35,14 @@ class TestAmiSearchByHashtags:
 
         executed_commands: list[str] = []
 
-        async def capture_run_ami_sync(_func, *args, **_kwargs):
+        async def capture_run_ami_command(_func, *args, **_kwargs):
             if args:
                 executed_commands.append(str(args[0]))
             return result_mock
 
-        with patch("ami_mcp.tools.hashtags.run_ami_sync", new=capture_run_ami_sync):
+        with patch(
+            "ami_mcp.tools.hashtags.run_ami_command", new=capture_run_ami_command
+        ):
             fn = registered_tools["ami_search_by_hashtags"]
             await fn(
                 scope="mc20_13TeV",
@@ -69,7 +71,7 @@ class TestAmiSearchByHashtags:
             OrderedDict([("ldn", "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351")])
         ]
         with patch(
-            "ami_mcp.tools.hashtags.run_ami_sync",
+            "ami_mcp.tools.hashtags.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_search_by_hashtags"]
@@ -99,7 +101,7 @@ class TestAmiSearchByHashtags:
             )
         ]
         with patch(
-            "ami_mcp.tools.hashtags.run_ami_sync",
+            "ami_mcp.tools.hashtags.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_search_by_hashtags"]
@@ -121,7 +123,7 @@ class TestAmiSearchByHashtags:
         mock_ctx: MagicMock,
     ) -> None:
         with patch(
-            "ami_mcp.tools.hashtags.run_ami_sync",
+            "ami_mcp.tools.hashtags.run_ami_command",
             new=AsyncMock(side_effect=RuntimeError("no proxy")),
         ):
             fn = registered_tools["ami_search_by_hashtags"]
@@ -145,7 +147,7 @@ class TestAmiGetDatasetHashtags:
         result_mock = MagicMock()
         result_mock.get_rows.return_value = rows
         with patch(
-            "ami_mcp.tools.hashtags.run_ami_sync",
+            "ami_mcp.tools.hashtags.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_get_dataset_hashtags"]
@@ -165,7 +167,7 @@ class TestAmiGetDatasetHashtags:
         result_mock = MagicMock()
         result_mock.get_rows.return_value = rows
         with patch(
-            "ami_mcp.tools.hashtags.run_ami_sync",
+            "ami_mcp.tools.hashtags.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_get_dataset_hashtags"]
@@ -183,7 +185,7 @@ class TestAmiGetDatasetHashtags:
         mock_ctx: MagicMock,
     ) -> None:
         with patch(
-            "ami_mcp.tools.hashtags.run_ami_sync",
+            "ami_mcp.tools.hashtags.run_ami_command",
             new=AsyncMock(side_effect=RuntimeError("connection error")),
         ):
             fn = registered_tools["ami_get_dataset_hashtags"]

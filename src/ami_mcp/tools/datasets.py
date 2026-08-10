@@ -11,8 +11,7 @@ from ami_mcp.tools._helpers import (
     append_next_actions,
     format_ami_result,
     format_error,
-    get_ami_client,
-    run_ami_sync,
+    run_ami_command,
     scope_to_catalog,
 )
 
@@ -54,10 +53,9 @@ def register(mcp: MCPServer) -> None:
             dataset: Full Logical Dataset Name (LDN), e.g.
                 "mc20_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.deriv.DAOD_PHYS.e8351_s3681_r13144_r13146_p5855"
         """
-        client = get_ami_client(ctx)
         command = f'AMIGetDatasetInfo -logicalDatasetName="{dataset}"'
         try:
-            result = await run_ami_sync(client.execute, command, format="dom_object")
+            result = await run_ami_command(ctx, command)
             rows = result.get_rows()
             if not rows:
                 return "No results."
@@ -136,11 +134,10 @@ def register(mcp: MCPServer) -> None:
         Returns:
             Formatted string with lineage summary, node table, and optional edges.
         """
-        client = get_ami_client(ctx)
         command = f'AMIGetDatasetProv -logicalDatasetName="{dataset}"'
 
         try:
-            result = await run_ami_sync(client.execute, command, format="dom_object")
+            result = await run_ami_command(ctx, command)
             nodes = result.get_rows("node")
             edges = result.get_rows("edge")
 
@@ -272,7 +269,6 @@ def register(mcp: MCPServer) -> None:
             data_type: Filter by data type (e.g. "EVNT", "DAOD_PHYS").
             limit: Maximum number of results to return (default 100).
         """
-        client = get_ami_client(ctx)
         catalog = scope_to_catalog(project)
 
         conditions: list[str] = [
@@ -290,7 +286,7 @@ def register(mcp: MCPServer) -> None:
         mql = f"SELECT {select_fields} WHERE {' AND '.join(conditions)} LIMIT 0,{limit}"
         command = f'SearchQuery -catalog={catalog} -entity=dataset -mql="{mql}"'
         try:
-            result = await run_ami_sync(client.execute, command, format="dom_object")
+            result = await run_ami_command(ctx, command)
             rows = result.get_rows()
         except Exception as exc:  # noqa: BLE001
             return format_error(

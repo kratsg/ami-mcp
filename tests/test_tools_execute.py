@@ -36,7 +36,7 @@ class TestAmiExecute:
         mock_ami_client.execute.return_value = result_mock
 
         with patch(
-            "ami_mcp.tools.execute.run_ami_sync",
+            "ami_mcp.tools.execute.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_execute"]
@@ -54,7 +54,7 @@ class TestAmiExecute:
         result_mock.get_rows.return_value = []
 
         with patch(
-            "ami_mcp.tools.execute.run_ami_sync",
+            "ami_mcp.tools.execute.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_execute"]
@@ -68,7 +68,7 @@ class TestAmiExecute:
         mock_ctx: MagicMock,
     ) -> None:
         with patch(
-            "ami_mcp.tools.execute.run_ami_sync",
+            "ami_mcp.tools.execute.run_ami_command",
             new=AsyncMock(side_effect=RuntimeError("auth failed")),
         ):
             fn = registered_tools["ami_execute"]

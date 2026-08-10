@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.server.mcpserver import Context, MCPServer  # noqa: TC002
 
-from ami_mcp.tools._helpers import get_ami_client, run_ami_sync
+from ami_mcp.tools._helpers import run_ami_command
 from ami_mcp.tools.xsecdb import _get_xsec_path, _parse_db_file
 
 if TYPE_CHECKING:
@@ -124,7 +124,6 @@ def register(mcp: MCPServer) -> None:
             database: Optional PMG xsec DB file or campaign (e.g. "mc16", "mc23").
                 If provided, cross-section metadata is compared against the DB.
         """
-        client = get_ami_client(ctx)
 
         ldn_list = [ln.strip() for ln in datasets.splitlines() if ln.strip()]
         if not ldn_list:
@@ -137,10 +136,9 @@ def register(mcp: MCPServer) -> None:
 
             # --- Hashtag lookup ---
             try:
-                hashtag_result = await run_ami_sync(
-                    client.execute,
+                hashtag_result = await run_ami_command(
+                    ctx,
                     f'DatasetWBListHashtags -ldn="{ldn}"',
-                    format="dom_object",
                 )
                 hashtag_rows = hashtag_result.get_rows()
                 if hashtag_rows:
@@ -170,10 +168,9 @@ def register(mcp: MCPServer) -> None:
             # --- Physics params from AMI ---
             ami_params: dict[str, str] = {}
             try:
-                phys_result = await run_ami_sync(
-                    client.execute,
+                phys_result = await run_ami_command(
+                    ctx,
                     f'GetPhysicsParamsForDataset -logicalDatasetName="{ldn}"',
-                    format="dom_object",
                 )
                 phys_rows = phys_result.get_rows()
                 if phys_rows:

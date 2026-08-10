@@ -29,7 +29,7 @@ src/ami_mcp/
 ├── resources.py         # MCP resources: AMI query language ref, nomenclature, commands
 └── tools/
     ├── __init__.py
-    ├── _helpers.py      # format_ami_result(), run_ami_sync(), scope_to_catalog()
+    ├── _helpers.py      # format_ami_result(), run_ami_command(), scope_to_catalog()
     ├── execute.py       # ami_execute (general purpose AMI command execution)
     ├── datasets.py      # ami_get_dataset_info, ami_list_datasets, ami_get_dataset_prov
     ├── hashtags.py      # ami_search_by_hashtags, ami_get_dataset_hashtags
@@ -64,26 +64,24 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.mcpserver import Context, MCPServer
 
 from ami_mcp.tools._helpers import (
     append_next_actions,
     format_ami_result,
     format_error,
-    run_ami_sync,
+    run_ami_command,
 )
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer) -> None:
     @mcp.tool()
     async def ami_my_tool(param: str, *, ctx: Context[Any, Any]) -> str:
         """Tool description — shown to the LLM as the tool's purpose."""
-        client = ctx.request_context.lifespan_context["ami_client"]
         try:
-            result = await run_ami_sync(
-                client.execute,
+            result = await run_ami_command(
+                ctx,
                 f'SomeAMICommand -param="{param}"',
-                format="dom_object",
             )
             rows = result.get_rows()
             output = format_ami_result(rows)
@@ -110,9 +108,12 @@ Key conventions:
 - Use `append_next_actions(output, [...])` to suggest follow-up tool calls
 - `except Exception as exc:` lines carry `# noqa: BLE001` inline;
   `broad-exception-caught` is disabled globally in pylint (`pyproject.toml`)
-- All pyAMI calls go through `run_ami_sync()` — pyAMI's HTTP client is
-  synchronous (httplib); wrapping with `asyncio.to_thread()` prevents blocking
-  the MCP event loop
+- All pyAMI calls go through `run_ami_command(ctx, command)` — it obtains a
+  client scoped to the call from the lifespan `client_factory` (stdio: one
+  shared client; HTTP: fresh per call; broker: backed by a redeemed per-user
+  proxy that is deleted afterwards) and runs pyAMI's synchronous (httplib)
+  `client.execute` via `asyncio.to_thread()` so the MCP event loop stays
+  responsive
 - **Do NOT import `pyAMI_atlas.api` in tool modules.** `pyAMI/utils.py` has an
   invalid escape sequence (`'\W+'`) that becomes a SyntaxError under
   `filterwarnings=["error"]` on Python 3.11+. Use `client.execute(cmd_string)`
@@ -170,7 +171,7 @@ client = pyAMI.client.Client("atlas-replica")
 **Core method** (used in all tool functions):
 
 ```python
-result = await run_ami_sync(client.execute, command_string, format="dom_object")
+result = await run_ami_command(ctx, command_string)
 rows = result.get_rows()  # list of OrderedDicts
 rows = result.get_rows("node")  # provenance node rows
 rows = result.get_rows("edge")  # provenance edge rows

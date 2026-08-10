@@ -46,7 +46,7 @@ class TestAmiGetPhysicsParams:
             ),
         ]
         with patch(
-            "ami_mcp.tools.physics.run_ami_sync",
+            "ami_mcp.tools.physics.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_get_physics_params"]
@@ -95,7 +95,7 @@ class TestAmiGetPhysicsParams:
             ),
         ]
         with patch(
-            "ami_mcp.tools.physics.run_ami_sync",
+            "ami_mcp.tools.physics.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_get_physics_params"]
@@ -113,7 +113,7 @@ class TestAmiGetPhysicsParams:
         result_mock = MagicMock()
         result_mock.get_rows.return_value = []
         with patch(
-            "ami_mcp.tools.physics.run_ami_sync",
+            "ami_mcp.tools.physics.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_get_physics_params"]
@@ -129,7 +129,7 @@ class TestAmiGetPhysicsParams:
         mock_ctx: MagicMock,
     ) -> None:
         with patch(
-            "ami_mcp.tools.physics.run_ami_sync",
+            "ami_mcp.tools.physics.run_ami_command",
             new=AsyncMock(side_effect=RuntimeError("timeout")),
         ):
             fn = registered_tools["ami_get_physics_params"]
@@ -154,7 +154,7 @@ class TestAmiGetPhysicsParams:
             )
         ]
         with patch(
-            "ami_mcp.tools.physics.run_ami_sync",
+            "ami_mcp.tools.physics.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_get_physics_params"]
