@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 from starlette.testclient import TestClient
 
-from ami_mcp.server import _make_shared_secret_app, serve
+from ami_mcp.server import _make_broker_app, _make_shared_secret_app, serve
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -77,6 +77,55 @@ class TestSharedSecretMode:
         assert "serverInfo" in response.text
 
 
+class TestBrokerMode:
+    @pytest.fixture
+    def broker_client(self, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+        verifier_mod = pytest.importorskip("af_credentials.verifier")
+
+        async def fake_verify(_self: object, token: str) -> object | None:
+            if token == "good-token":
+                claims: object = verifier_mod.BrokerClaims(
+                    sub="kratsg", jti="test-jti", exp=4102444800
+                )
+                return claims
+            return None
+
+        monkeypatch.setattr(verifier_mod.BrokerTokenVerifier, "verify", fake_verify)
+        app = _make_broker_app(
+            broker_url="http://broker.invalid",
+            jwks_url="http://broker.invalid/.well-known/jwks.json",
+            issuer="http://broker.invalid",
+            audience="ami",
+            resource_url="http://127.0.0.1:8000",
+            host="127.0.0.1",
+        )
+        with TestClient(app, base_url="http://127.0.0.1:8000") as test_client:
+            yield test_client
+
+    def test_healthz_needs_no_auth(self, broker_client: TestClient) -> None:
+        response = broker_client.get("/healthz")
+        assert response.status_code == 200
+
+    def test_initialize_with_unknown_token_is_401(
+        self, broker_client: TestClient
+    ) -> None:
+        response = broker_client.post(
+            "/mcp",
+            json=_INITIALIZE,
+            headers={**_MCP_HEADERS, "Authorization": "Bearer wrong"},
+        )
+        assert response.status_code == 401
+
+    def test_initialize_with_broker_token(self, broker_client: TestClient) -> None:
+        response = broker_client.post(
+            "/mcp",
+            json=_INITIALIZE,
+            headers={**_MCP_HEADERS, "Authorization": "Bearer good-token"},
+        )
+        assert response.status_code == 200
+        assert "serverInfo" in response.text
+
+
 class TestServeGuards:
     def test_shared_secret_with_stdio_exits(self) -> None:
         with pytest.raises(SystemExit) as excinfo:
@@ -86,4 +135,19 @@ class TestServeGuards:
     def test_http_without_shared_secret_exits(self) -> None:
         with pytest.raises(SystemExit) as excinfo:
             serve(transport="http")
+        assert excinfo.value.code == 1
+
+    def test_broker_without_broker_url_exits(self) -> None:
+        with pytest.raises(SystemExit) as excinfo:
+            serve(transport="http", auth="broker")
+        assert excinfo.value.code == 1
+
+    def test_broker_with_shared_secret_exits(self) -> None:
+        with pytest.raises(SystemExit) as excinfo:
+            serve(
+                transport="http",
+                auth="broker",
+                broker_url="http://broker.invalid",
+                shared_secret="s3cr3t",
+            )
         assert excinfo.value.code == 1

@@ -55,6 +55,40 @@ def main() -> None:
         ),
     )
     serve_parser.add_argument(
+        "--auth",
+        choices=("shared-secret", "broker"),
+        default="shared-secret",
+        help=(
+            "HTTP auth mode: 'shared-secret' gates the server's own AMI "
+            "identity behind a static bearer; 'broker' verifies AF-broker-"
+            "issued JWTs and redeems per-user VOMS proxies (default: "
+            "shared-secret)"
+        ),
+    )
+    serve_parser.add_argument(
+        "--broker-url",
+        default=os.environ.get("AMI_MCP_BROKER_URL"),
+        help="AF credential broker base URL for --auth broker (env: AMI_MCP_BROKER_URL)",
+    )
+    serve_parser.add_argument(
+        "--broker-jwks-url",
+        default=os.environ.get("AMI_MCP_BROKER_JWKS_URL"),
+        help=(
+            "JWKS URL for verifying broker-issued JWTs "
+            "(env: AMI_MCP_BROKER_JWKS_URL; default: BROKER_URL/.well-known/jwks.json)"
+        ),
+    )
+    serve_parser.add_argument(
+        "--broker-issuer",
+        default=os.environ.get("AMI_MCP_BROKER_ISSUER"),
+        help="Expected iss claim of broker-issued JWTs (default: BROKER_URL)",
+    )
+    serve_parser.add_argument(
+        "--audience",
+        default="ami",
+        help="Expected aud claim of broker-issued JWTs (default: ami)",
+    )
+    serve_parser.add_argument(
         "--forwarded-allow-ips",
         default="127.0.0.1",
         help="IPs trusted for X-Forwarded-* headers (default: 127.0.0.1)",
@@ -72,8 +106,13 @@ def main() -> None:
             transport=args.transport,
             host=args.host,
             port=args.port,
+            auth=args.auth,
             shared_secret=args.shared_secret,
             resource_url=args.resource_url,
+            broker_url=args.broker_url,
+            broker_jwks_url=args.broker_jwks_url,
+            broker_issuer=args.broker_issuer,
+            audience=args.audience,
             forwarded_allow_ips=args.forwarded_allow_ips,
             log_level=args.log_level,
         )

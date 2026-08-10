@@ -33,6 +33,12 @@ dependencies = [
   "mcp>=2.0.0,<3",
 ]
 
+[project.optional-dependencies]
+# Per-user auth behind the AF MCP credential broker (af-mcp-platform).
+broker = [
+  "af-credentials[mcp]",
+]
+
 [project.scripts]
 ami-mcp = "ami_mcp.cli:main"
 
@@ -113,6 +119,12 @@ disallow_incomplete_defs = true
 
 [[tool.mypy.overrides]]
 module = ["pyAMI.*", "pyAMI_atlas.*"]
+ignore_missing_imports = true
+
+# af-credentials is installed from git until its first PyPI release, so the
+# isolated pre-commit mypy environment cannot resolve it.
+[[tool.mypy.overrides]]
+module = ["af_credentials.*"]
 ignore_missing_imports = true
 
 
