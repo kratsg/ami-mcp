@@ -22,6 +22,7 @@ class AmiClientFactory(ABC):
     def get_client(self, ctx: Any) -> Any:
         """Return a pyAMI client appropriate for the request in *ctx*."""
 
+    @abstractmethod
     def close(self) -> None:
         """Release any resources held by the factory."""
 
@@ -52,3 +53,6 @@ class EnvBasedClientFactory(AmiClientFactory):
         if self._client is not None:
             return self._client
         return pyAMI.client.Client(self._endpoint)
+
+    def close(self) -> None:
+        """Nothing to release: pyAMI clients hold no persistent connections."""

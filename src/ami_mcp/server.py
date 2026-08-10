@@ -10,16 +10,23 @@ from typing import TYPE_CHECKING, Any
 
 import pyAMI.client
 import pyAMI_atlas.api as _atlas_api  # noqa: F401 (side-effect: registers ATLAS endpoints)
+import uvicorn
+from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
 from mcp.server.mcpserver import MCPServer
+from pydantic import AnyHttpUrl
+from starlette.responses import JSONResponse
 
 from ami_mcp.auth.factory import EnvBasedClientFactory
+from ami_mcp.auth.shared_secret import SharedSecretVerifier
+from ami_mcp.nomenclature import AMI_QUERY_LANGUAGE, ATLAS_NOMENCLATURE
+from ami_mcp.resources import register as register_resources
+from ami_mcp.tools import datasets, execute, hashtags, physics, tags, validate, xsecdb
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-from ami_mcp.nomenclature import AMI_QUERY_LANGUAGE, ATLAS_NOMENCLATURE
-from ami_mcp.resources import register as register_resources
-from ami_mcp.tools import datasets, execute, hashtags, physics, tags, validate, xsecdb
+    from starlette.applications import Starlette
+    from starlette.requests import Request
 
 _INSTRUCTIONS = (
     "MCP server for the ATLAS AMI metadata interface and PMG Central Page. "
@@ -80,8 +87,15 @@ def _preflight_check() -> None:
         sys.stderr.write(f"[ami-mcp] WARNING: {w}\n")
 
 
+def _register_all(mcp: MCPServer) -> None:
+    """Register every tool module and the MCP resources on *mcp*."""
+    for _module in [execute, datasets, hashtags, physics, tags, xsecdb, validate]:
+        _module.register(mcp)
+    register_resources(mcp)
+
+
 def _make_mcp() -> MCPServer:
-    """Build and return a configured MCPServer instance."""
+    """Build and return a configured MCPServer instance for stdio."""
 
     @asynccontextmanager
     async def _lifespan(_server: MCPServer) -> AsyncGenerator[dict[str, Any], None]:
@@ -98,16 +112,110 @@ def _make_mcp() -> MCPServer:
             factory.close()
 
     mcp = MCPServer("ami-mcp", lifespan=_lifespan, instructions=_INSTRUCTIONS)
-
-    for _module in [execute, datasets, hashtags, physics, tags, xsecdb, validate]:
-        _module.register(mcp)
-
-    register_resources(mcp)
-
+    _register_all(mcp)
     return mcp
 
 
-def serve() -> None:
-    """Start the MCP server over stdio."""
+def _make_shared_secret_app(
+    *,
+    secret: str,
+    resource_url: str,
+    host: str,
+) -> Starlette:
+    """Build the ASGI app for HTTP transport gated by a static bearer.
+
+    Serves one env-configured pyAMI identity (exactly like stdio, e.g. a
+    server-managed VOMS proxy) behind a server-wide shared secret enforced by
+    ``SharedSecretVerifier``. Clients are handed out per request because
+    pyAMI's HttpClient is not safe under concurrent use.
+
+    The returned Starlette app is used as the uvicorn root app; in mcp v2 it
+    carries the session-manager lifespan itself, so no extra wiring is needed.
+    """
+
+    @asynccontextmanager
+    async def _lifespan(_server: MCPServer) -> AsyncGenerator[dict[str, Any], None]:
+        endpoint = os.environ.get("AMI_ENDPOINT", "atlas-replica")
+        factory = EnvBasedClientFactory(endpoint=endpoint)
+        try:
+            yield {"client_factory": factory}
+        finally:
+            factory.close()
+
+    mcp = MCPServer(
+        "ami-mcp",
+        instructions=_INSTRUCTIONS,
+        lifespan=_lifespan,
+        token_verifier=SharedSecretVerifier(secret),
+        auth=AuthSettings(
+            issuer_url=AnyHttpUrl(resource_url),
+            # No OAuth authorization server backs this resource; clients
+            # present the static bearer out-of-band, so do not advertise a
+            # (non-existent) protected-resource discovery chain.
+            resource_server_url=None,
+            client_registration_options=ClientRegistrationOptions(enabled=False),
+            required_scopes=[],
+        ),
+    )
+    _register_all(mcp)
+
+    async def _healthz(_request: Request) -> JSONResponse:
+        return JSONResponse({"status": "ok"})
+
+    # Call form instead of decorator: custom_route lacks a return annotation
+    # in the SDK, and an untyped decorator strips _healthz's type under mypy.
+    mcp.custom_route("/healthz", methods=["GET"])(_healthz)
+
+    return mcp.streamable_http_app(streamable_http_path="/mcp", host=host)
+
+
+def serve(
+    transport: str = "stdio",
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    shared_secret: str | None = None,
+    resource_url: str | None = None,
+    forwarded_allow_ips: str = "127.0.0.1",
+    log_level: str = "info",
+) -> None:
+    """Start the MCP server over the selected transport."""
+    if shared_secret and transport == "stdio":
+        sys.stderr.write(
+            "[ami-mcp] Error: --shared-secret requires --transport http "
+            "(it is ignored by stdio transport).\n"
+        )
+        sys.exit(1)
+
+    if transport == "stdio":
+        _preflight_check()
+        _make_mcp().run(transport="stdio")
+        return
+
+    # HTTP transport: currently shared-secret only (per-user broker mode
+    # arrives with the af-credentials integration).
+    if not shared_secret:
+        sys.stderr.write(
+            "[ami-mcp] Error: HTTP transport requires --shared-secret "
+            "(or AMI_MCP_SHARED_SECRET).\n"
+        )
+        sys.exit(1)
+
+    sys.stderr.write(
+        "[ami-mcp] NOTICE: shared-secret HTTP mode is active — all access is "
+        "gated by a single static bearer and every request shares the "
+        "server's env-configured AMI identity.\n"
+    )
     _preflight_check()
-    _make_mcp().run(transport="stdio")
+    app = _make_shared_secret_app(
+        secret=shared_secret,
+        resource_url=resource_url or f"http://{host}:{port}",
+        host=host,
+    )
+    uvicorn.run(
+        app,
+        host=host,
+        port=port,
+        proxy_headers=True,
+        forwarded_allow_ips=forwarded_allow_ips,
+        log_level=log_level,
+    )
