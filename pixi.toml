@@ -8,6 +8,9 @@ preview = ["pixi-build"]
 [dependencies]
 ami-mcp = { path = "./" }
 setuptools = "*"
+# Broker-mode client library (its [mcp] extra's mcp dependency is already a
+# direct dependency of ami-mcp itself)
+af-credentials = ">=0.1.0"
 
 [package]
 name = "ami-mcp"
@@ -32,9 +35,6 @@ voms-lsc = "*"
 [pypi-dependencies]
 pyAMI-core = ">=5.1.10"
 pyAMI-atlas = ">=5.1.10"
-# Broker-mode client library; pinned to the af-mcp-platform PR branch until
-# af-credentials is released on PyPI (then: af-credentials = { version = ">=0.1", extras = ["mcp"] })
-af-credentials = { git = "https://github.com/maniaclab/af-mcp-platform", subdirectory = "libs/af-credentials", rev = "cda0a02418eb3543ee7eeab054595c764d0aad63", extras = ["mcp"] }
 
 [feature.py310.dependencies]
 python = "<3.11,>=3.10"
