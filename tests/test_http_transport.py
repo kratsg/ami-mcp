@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
 import pytest
 from starlette.testclient import TestClient
 
 from ami_mcp.server import _make_shared_secret_app, serve
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 _INITIALIZE = {
     "jsonrpc": "2.0",

@@ -109,20 +109,30 @@ async def run_ami_sync(func: Any, *args: Any, **kwargs: Any) -> Any:
     return await asyncio.to_thread(func, *args, **kwargs)
 
 
-def get_ami_client(ctx: Any) -> Any:
-    """Return the pyAMI client for the current request.
+async def run_ami_command(
+    ctx: Any,
+    command: str,
+    *,
+    format: str = "dom_object",  # pylint: disable=redefined-builtin
+) -> Any:
+    """Execute an AMI command with a client scoped to this one call.
 
-    Delegates to the ``AmiClientFactory`` stored in the lifespan context, so
-    tools stay agnostic of whether the client is process-wide (stdio) or
-    provisioned per request (HTTP modes).
+    Asks the ``AmiClientFactory`` in the lifespan context for a client, runs
+    ``client.execute`` off the event loop, and releases the client (and any
+    per-user credential backing it, in broker mode) before returning. Tools
+    stay agnostic of how the client is provisioned.
 
     Args:
         ctx: The MCP request Context.
+        command: AMI command string.
+        format: pyAMI result format (default "dom_object").
 
     Returns:
-        A pyAMI client ready for client.execute() calls.
+        The pyAMI result object (e.g. DOMObject — call .get_rows() on it).
     """
-    return ctx.request_context.lifespan_context["client_factory"].get_client(ctx)
+    factory = ctx.request_context.lifespan_context["client_factory"]
+    async with factory.get_client(ctx) as client:
+        return await run_ami_sync(client.execute, command, format=format)
 
 
 # Maps scope strings (e.g. "mc20_13TeV") to their AMI evgen catalog names.

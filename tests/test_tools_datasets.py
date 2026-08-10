@@ -61,7 +61,7 @@ class TestAmiGetDatasetInfo:
     ) -> None:
         result_mock = _make_result_mock(_DATASET_ROWS)
         with patch(
-            "ami_mcp.tools.datasets.run_ami_sync",
+            "ami_mcp.tools.datasets.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_get_dataset_info"]
@@ -78,7 +78,7 @@ class TestAmiGetDatasetInfo:
         mock_ctx: MagicMock,
     ) -> None:
         with patch(
-            "ami_mcp.tools.datasets.run_ami_sync",
+            "ami_mcp.tools.datasets.run_ami_command",
             new=AsyncMock(side_effect=RuntimeError("network error")),
         ):
             fn = registered_tools["ami_get_dataset_info"]
@@ -116,7 +116,7 @@ class TestAmiGetDatasetProv:
         ]
         result_mock = _make_result_mock([], node_rows=nodes, edge_rows=edges)
         with patch(
-            "ami_mcp.tools.datasets.run_ami_sync",
+            "ami_mcp.tools.datasets.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_get_dataset_prov"]
@@ -134,7 +134,7 @@ class TestAmiGetDatasetProv:
     ) -> None:
         result_mock = _make_result_mock([], node_rows=[], edge_rows=[])
         with patch(
-            "ami_mcp.tools.datasets.run_ami_sync",
+            "ami_mcp.tools.datasets.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_get_dataset_prov"]
@@ -176,7 +176,7 @@ class TestAmiGetDatasetProv:
         result_mock = _make_result_mock([], nodes, edges)
 
         with patch(
-            "ami_mcp.tools.datasets.run_ami_sync",
+            "ami_mcp.tools.datasets.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_get_dataset_prov"]
@@ -217,7 +217,7 @@ class TestAmiGetDatasetProv:
         result_mock = _make_result_mock([], nodes, edges)
 
         with patch(
-            "ami_mcp.tools.datasets.run_ami_sync",
+            "ami_mcp.tools.datasets.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_get_dataset_prov"]
@@ -261,7 +261,7 @@ class TestAmiGetDatasetProv:
         result_mock = _make_result_mock([], nodes, edges)
 
         with patch(
-            "ami_mcp.tools.datasets.run_ami_sync",
+            "ami_mcp.tools.datasets.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_get_dataset_prov"]
@@ -275,7 +275,7 @@ class TestAmiGetDatasetProv:
     async def test_no_nodes_found(self, registered_tools, mock_ctx):
         result_mock = _make_result_mock([])
         with patch(
-            "ami_mcp.tools.datasets.run_ami_sync",
+            "ami_mcp.tools.datasets.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_get_dataset_prov"]
@@ -304,7 +304,7 @@ class TestAmiGetDatasetProv:
         edges = [OrderedDict([("source", "n1.EVNT"), ("destination", "n2.HITS")])]
         result_mock = _make_result_mock([], nodes, edges)
         with patch(
-            "ami_mcp.tools.datasets.run_ami_sync",
+            "ami_mcp.tools.datasets.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_get_dataset_prov"]
@@ -344,7 +344,7 @@ class TestAmiGetDatasetProv:
         edges: list[dict[str, str]] = []
         result_mock = _make_result_mock([], nodes, edges)
         with patch(
-            "ami_mcp.tools.datasets.run_ami_sync",
+            "ami_mcp.tools.datasets.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_get_dataset_prov"]
@@ -372,7 +372,7 @@ class TestAmiGetDatasetInfoContextualHints:
         ]
         result_mock = _make_result_mock(rows)
         with patch(
-            "ami_mcp.tools.datasets.run_ami_sync",
+            "ami_mcp.tools.datasets.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_get_dataset_info"]
@@ -399,7 +399,7 @@ class TestAmiGetDatasetInfoContextualHints:
         ]
         result_mock = _make_result_mock(rows)
         with patch(
-            "ami_mcp.tools.datasets.run_ami_sync",
+            "ami_mcp.tools.datasets.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_get_dataset_info"]
@@ -424,7 +424,7 @@ class TestAmiListDatasets:
             executed_commands.append(str(args[0]))
             return result_mock
 
-        with patch("ami_mcp.tools.datasets.run_ami_sync", new=capture):
+        with patch("ami_mcp.tools.datasets.run_ami_command", new=capture):
             fn = registered_tools["ami_list_datasets"]
             await fn(patterns="%Zee%", project="mc23_13p6TeV", ctx=mock_ctx)
 
@@ -444,7 +444,7 @@ class TestAmiListDatasets:
         mock_ctx: MagicMock,
     ) -> None:
         with patch(
-            "ami_mcp.tools.datasets.run_ami_sync",
+            "ami_mcp.tools.datasets.run_ami_command",
             new=AsyncMock(side_effect=RuntimeError("parse error")),
         ):
             fn = registered_tools["ami_list_datasets"]

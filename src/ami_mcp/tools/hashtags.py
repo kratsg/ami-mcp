@@ -9,8 +9,7 @@ from mcp.server.mcpserver import Context, MCPServer  # noqa: TC002
 from ami_mcp.tools._helpers import (
     append_next_actions,
     format_error,
-    get_ami_client,
-    run_ami_sync,
+    run_ami_command,
 )
 
 
@@ -53,7 +52,6 @@ def register(mcp: MCPServer) -> None:
                 The AMI command returns datasets from all campaigns; this
                 prefix-matches the ldn field.
         """
-        client = get_ami_client(ctx)
 
         scope_levels = ["PMGL1"]
         name_values = [l1]
@@ -74,7 +72,7 @@ def register(mcp: MCPServer) -> None:
             ' -operator="AND"'
         )
         try:
-            result = await run_ami_sync(client.execute, command, format="dom_object")
+            result = await run_ami_command(ctx, command)
             rows = result.get_rows()
             # Filter to the requested campaign scope client-side
             rows = [r for r in rows if r.get("ldn", "").startswith(f"{scope}.")]
@@ -129,7 +127,6 @@ def register(mcp: MCPServer) -> None:
                 the EVNT dataset. Example:
                 "mc20_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.evgen.EVNT.e8351"
         """
-        client = get_ami_client(ctx)
         command = f'DatasetWBListHashtags -ldn="{dataset}"'
 
         # Warn if the input doesn't look like an EVNT dataset
@@ -142,7 +139,7 @@ def register(mcp: MCPServer) -> None:
             )
 
         try:
-            result = await run_ami_sync(client.execute, command, format="dom_object")
+            result = await run_ami_command(ctx, command)
             rows = result.get_rows()
             if not rows:
                 return "*No hashtags found in AMI.*"

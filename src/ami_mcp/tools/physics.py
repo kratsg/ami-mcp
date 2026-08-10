@@ -9,8 +9,7 @@ from mcp.server.mcpserver import Context, MCPServer  # noqa: TC002
 from ami_mcp.tools._helpers import (
     append_next_actions,
     format_error,
-    get_ami_client,
-    run_ami_sync,
+    run_ami_command,
 )
 
 
@@ -38,7 +37,6 @@ def register(mcp: MCPServer) -> None:
                 If you only have a DAOD or other derived LDN, use ami_get_dataset_prov
                 first to find the parent EVNT dataset.
         """
-        client = get_ami_client(ctx)
         command = f'GetPhysicsParamsForDataset -logicalDatasetName="{dataset}"'
 
         # Warn if the input doesn't look like an EVNT dataset
@@ -51,7 +49,7 @@ def register(mcp: MCPServer) -> None:
             )
 
         try:
-            result = await run_ami_sync(client.execute, command, format="dom_object")
+            result = await run_ami_command(ctx, command)
             rows = result.get_rows()
             if not rows:
                 return "No physics parameters found."

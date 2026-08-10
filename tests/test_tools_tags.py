@@ -40,7 +40,7 @@ class TestAmiGetAmiTag:
         result_mock = MagicMock()
         result_mock.get_rows.return_value = rows
         with patch(
-            "ami_mcp.tools.tags.run_ami_sync",
+            "ami_mcp.tools.tags.run_ami_command",
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_get_ami_tag"]
@@ -55,7 +55,7 @@ class TestAmiGetAmiTag:
         mock_ctx: MagicMock,
     ) -> None:
         with patch(
-            "ami_mcp.tools.tags.run_ami_sync",
+            "ami_mcp.tools.tags.run_ami_command",
             new=AsyncMock(side_effect=RuntimeError("tag not found")),
         ):
             fn = registered_tools["ami_get_ami_tag"]
@@ -84,7 +84,7 @@ class TestAmiGetAmiTag:
             executed_commands.append(str(args[0]))
             return result_mock
 
-        with patch("ami_mcp.tools.tags.run_ami_sync", new=capture):
+        with patch("ami_mcp.tools.tags.run_ami_command", new=capture):
             fn = registered_tools["ami_get_ami_tag"]
             result = await fn(tag="e8351_s3681_r13144", ctx=mock_ctx)
 
