@@ -16,6 +16,11 @@ from mcp.server.mcpserver import MCPServer
 from pydantic import AnyHttpUrl
 from starlette.responses import JSONResponse
 
+from ami_mcp.auth.broker import (
+    BrokerProxyClientFactory,
+    make_broker_token_verifier,
+    make_proxy_client,
+)
 from ami_mcp.auth.factory import EnvBasedClientFactory
 from ami_mcp.auth.shared_secret import SharedSecretVerifier
 from ami_mcp.nomenclature import AMI_QUERY_LANGUAGE, ATLAS_NOMENCLATURE
@@ -169,12 +174,68 @@ def _make_shared_secret_app(
     return mcp.streamable_http_app(streamable_http_path="/mcp", host=host)
 
 
+def _make_broker_app(
+    *,
+    broker_url: str,
+    jwks_url: str,
+    issuer: str,
+    audience: str,
+    resource_url: str,
+    host: str,
+) -> Starlette:
+    """Build the ASGI app for HTTP transport behind the AF credential broker.
+
+    Bearers are broker-issued identity JWTs verified against the broker's
+    JWKS; each AMI call redeems the caller's VOMS proxy at the broker and
+    disposes of it immediately afterwards (see ``ami_mcp.auth.broker``).
+    """
+    verifier = make_broker_token_verifier(jwks_url, issuer, audience)
+    proxy_client = make_proxy_client(broker_url)
+
+    @asynccontextmanager
+    async def _lifespan(_server: MCPServer) -> AsyncGenerator[dict[str, Any], None]:
+        endpoint = os.environ.get("AMI_ENDPOINT", "atlas-replica")
+        factory = BrokerProxyClientFactory(proxy_client, endpoint=endpoint)
+        try:
+            yield {"client_factory": factory}
+        finally:
+            factory.close()
+
+    mcp = MCPServer(
+        "ami-mcp",
+        instructions=_INSTRUCTIONS,
+        lifespan=_lifespan,
+        token_verifier=verifier,
+        auth=AuthSettings(
+            issuer_url=AnyHttpUrl(resource_url),
+            # The aggregator injects the bearer itself; there is no OAuth
+            # discovery chain to advertise on this resource.
+            resource_server_url=None,
+            client_registration_options=ClientRegistrationOptions(enabled=False),
+            required_scopes=[],
+        ),
+    )
+    _register_all(mcp)
+
+    async def _healthz(_request: Request) -> JSONResponse:
+        return JSONResponse({"status": "ok"})
+
+    mcp.custom_route("/healthz", methods=["GET"])(_healthz)
+
+    return mcp.streamable_http_app(streamable_http_path="/mcp", host=host)
+
+
 def serve(
     transport: str = "stdio",
     host: str = "127.0.0.1",
     port: int = 8000,
+    auth: str = "shared-secret",
     shared_secret: str | None = None,
     resource_url: str | None = None,
+    broker_url: str | None = None,
+    broker_jwks_url: str | None = None,
+    broker_issuer: str | None = None,
+    audience: str = "ami",
     forwarded_allow_ips: str = "127.0.0.1",
     log_level: str = "info",
 ) -> None:
@@ -191,26 +252,51 @@ def serve(
         _make_mcp().run(transport="stdio")
         return
 
-    # HTTP transport: currently shared-secret only (per-user broker mode
-    # arrives with the af-credentials integration).
-    if not shared_secret:
-        sys.stderr.write(
-            "[ami-mcp] Error: HTTP transport requires --shared-secret "
-            "(or AMI_MCP_SHARED_SECRET).\n"
+    if auth == "broker":
+        if shared_secret:
+            sys.stderr.write(
+                "[ami-mcp] Error: --shared-secret conflicts with --auth broker; "
+                "pick one HTTP auth mode.\n"
+            )
+            sys.exit(1)
+        if not broker_url:
+            sys.stderr.write(
+                "[ami-mcp] Error: --auth broker requires --broker-url "
+                "(or AMI_MCP_BROKER_URL).\n"
+            )
+            sys.exit(1)
+        # No env-proxy preflight: per-user proxies arrive at runtime via the
+        # broker; the server itself holds no AMI credential.
+        app = _make_broker_app(
+            broker_url=broker_url,
+            jwks_url=broker_jwks_url
+            or f"{broker_url.rstrip('/')}/.well-known/jwks.json",
+            issuer=broker_issuer or broker_url,
+            audience=audience,
+            resource_url=resource_url or f"http://{host}:{port}",
+            host=host,
         )
-        sys.exit(1)
+    else:
+        # HTTP transport, shared-secret mode.
+        if not shared_secret:
+            sys.stderr.write(
+                "[ami-mcp] Error: HTTP transport requires --shared-secret "
+                "(or AMI_MCP_SHARED_SECRET), or --auth broker.\n"
+            )
+            sys.exit(1)
 
-    sys.stderr.write(
-        "[ami-mcp] NOTICE: shared-secret HTTP mode is active — all access is "
-        "gated by a single static bearer and every request shares the "
-        "server's env-configured AMI identity.\n"
-    )
-    _preflight_check()
-    app = _make_shared_secret_app(
-        secret=shared_secret,
-        resource_url=resource_url or f"http://{host}:{port}",
-        host=host,
-    )
+        sys.stderr.write(
+            "[ami-mcp] NOTICE: shared-secret HTTP mode is active — all access is "
+            "gated by a single static bearer and every request shares the "
+            "server's env-configured AMI identity.\n"
+        )
+        _preflight_check()
+        app = _make_shared_secret_app(
+            secret=shared_secret,
+            resource_url=resource_url or f"http://{host}:{port}",
+            host=host,
+        )
+
     uvicorn.run(
         app,
         host=host,
