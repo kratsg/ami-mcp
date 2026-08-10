@@ -18,23 +18,20 @@ backend = { name = "pixi-build-python", version = "*" }
 config = { noarch = true }
 
 [package.host-dependencies]
-python = "<3.12"   # ensures the host/build environment uses Python ≤3.11
+python = ">=3.10"
 uv = "*"
 hatchling = ">=1.25"
 hatch-vcs = ">=0.4"
 
 [package.run-dependencies]
-mcp = ">=1.0"
+mcp = ">=1.0,<2"
 ca-policy-lcg = "*"
 voms = "*"
 voms-lsc = "*"
 
 [pypi-dependencies]
-pyAMI-core = "*"
-pyAMI-atlas = "*"
-
-[pypi-options]
-no-build-isolation = ["pyami-atlas"]
+pyAMI-core = ">=5.1.10"
+pyAMI-atlas = ">=5.1.10"
 
 [feature.py310.dependencies]
 python = "<3.11,>=3.10"
@@ -42,11 +39,14 @@ python = "<3.11,>=3.10"
 [feature.py311.dependencies]
 python = "<3.12,>=3.11"
 
-#[feature.py312.dependencies]
-#python = "<3.13,>=3.12"
-#
-#[feature.py313.dependencies]
-#python = "<3.14,>=3.13"
+[feature.py312.dependencies]
+python = "<3.13,>=3.12"
+
+[feature.py313.dependencies]
+python = "<3.14,>=3.13"
+
+[feature.py314.dependencies]
+python = "<3.15,>=3.14"
 
 [feature.test.dependencies]
 pytest = ">=9"
@@ -97,8 +97,9 @@ docs = ["docs"]
 dev = ["dev"]
 py310 = ["test", "py310"]
 py311 = ["test", "py311"]
-#py312 = ["test", "py312"]
-#py313 = ["test", "py313"]
+py312 = ["test", "py312"]
+py313 = ["test", "py313"]
+py314 = ["test", "py314"]
 
 [tasks]
 # Composite tasks that span multiple features

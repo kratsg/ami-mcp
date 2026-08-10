@@ -176,9 +176,12 @@ rows = result.get_rows("node")  # provenance node rows
 rows = result.get_rows("edge")  # provenance edge rows
 ```
 
-**pypi install note**: `pyAMI-atlas` imports `pyAMI-core` at build time without
-declaring it. In `pixi.toml` both must be listed in `[pypi-dependencies]` and
-`pyami-atlas` must be in `[pypi-options] no-build-isolation`.
+**pypi install note**: pyAMI ≥5.1.10 builds with hatchling and declares its
+build requirements, so both packages install normally from `[pypi-dependencies]`
+(pinned `>=5.1.10`). Earlier releases (≤5.1.4) imported `pyAMI-core` at build
+time without declaring it and needed
+`[pypi-options] no-build-isolation = ["pyami-atlas"]` — do not reintroduce older
+pins without restoring that workaround.
 
 ## AMI command patterns
 
