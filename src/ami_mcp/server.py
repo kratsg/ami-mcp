@@ -1,4 +1,4 @@
-"""FastMCP server setup for ami-mcp."""
+"""MCP server setup for ami-mcp."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import pyAMI.client
 import pyAMI_atlas.api as _atlas_api  # noqa: F401 (side-effect: registers ATLAS endpoints)
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -78,11 +78,11 @@ def _preflight_check() -> None:
         sys.stderr.write(f"[ami-mcp] WARNING: {w}\n")
 
 
-def _make_mcp() -> FastMCP:
-    """Build and return a configured FastMCP instance."""
+def _make_mcp() -> MCPServer:
+    """Build and return a configured MCPServer instance."""
 
     @asynccontextmanager
-    async def _lifespan(_server: FastMCP) -> AsyncGenerator[dict[str, Any], None]:
+    async def _lifespan(_server: MCPServer) -> AsyncGenerator[dict[str, Any], None]:
         """Initialize the pyAMI client for the lifetime of the MCP server.
 
         The client reads the VOMS proxy from X509_USER_PROXY or the default
@@ -92,7 +92,7 @@ def _make_mcp() -> FastMCP:
         client = pyAMI.client.Client(endpoint)
         yield {"ami_client": client}
 
-    mcp = FastMCP("ami-mcp", lifespan=_lifespan, instructions=_INSTRUCTIONS)
+    mcp = MCPServer("ami-mcp", lifespan=_lifespan, instructions=_INSTRUCTIONS)
 
     for _module in [execute, datasets, hashtags, physics, tags, xsecdb, validate]:
         _module.register(mcp)

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP  # noqa: TC002
+from mcp.server.mcpserver import Context, MCPServer  # noqa: TC002
 
 from ami_mcp.tools._helpers import (
     append_next_actions,
@@ -34,7 +34,7 @@ _DATASET_INFO_FIELDS = [
 ]
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer) -> None:
     """Register dataset info tools."""
 
     @mcp.tool()

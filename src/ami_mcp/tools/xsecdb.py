@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from mcp.server.fastmcp import Context, FastMCP  # noqa: TC002
+from mcp.server.mcpserver import Context, MCPServer  # noqa: TC002
 
 log = logging.getLogger()
 
@@ -111,7 +111,7 @@ def _format_xsec_rows(rows: list[dict[str, str]]) -> str:
     return "\n\n".join(sections)
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer) -> None:
     """Register PMG cross-section database tools."""
 
     @mcp.tool()

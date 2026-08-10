@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import Context, FastMCP  # noqa: TC002
+from mcp.server.mcpserver import Context, MCPServer  # noqa: TC002
 
 from ami_mcp.tools._helpers import run_ami_sync
 from ami_mcp.tools.xsecdb import _get_xsec_path, _parse_db_file
@@ -99,7 +99,7 @@ def _xsec_db_section(
         section_lines.append(f"*xsec DB comparison error: {exc}*")
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer) -> None:
     """Register validation tools."""
 
     @mcp.tool()

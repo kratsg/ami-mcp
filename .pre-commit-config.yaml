@@ -57,7 +57,7 @@ repos:
         args: []
         additional_dependencies:
           - pytest
-          - mcp<2
+          - mcp==2.0.0
 
   - repo: https://github.com/codespell-project/codespell
     rev: "v2.4.3"
