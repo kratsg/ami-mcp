@@ -5,6 +5,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from ami_mcp.auth.factory import EnvBasedClientFactory
+
 
 @pytest.fixture
 def mock_ami_client() -> MagicMock:
@@ -18,9 +20,11 @@ def mock_ami_client() -> MagicMock:
 
 @pytest.fixture
 def mock_ctx(mock_ami_client: MagicMock) -> MagicMock:
-    """Return a mock MCPServer Context with an ami_client in lifespan context."""
+    """Return a mock MCPServer Context with a client factory in lifespan context."""
     ctx: MagicMock = MagicMock()
-    ctx.request_context.lifespan_context = {"ami_client": mock_ami_client}
+    ctx.request_context.lifespan_context = {
+        "client_factory": EnvBasedClientFactory(client=mock_ami_client)
+    }
     return ctx
 
 

@@ -12,6 +12,8 @@ import pyAMI.client
 import pyAMI_atlas.api as _atlas_api  # noqa: F401 (side-effect: registers ATLAS endpoints)
 from mcp.server.mcpserver import MCPServer
 
+from ami_mcp.auth.factory import EnvBasedClientFactory
+
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
@@ -89,8 +91,11 @@ def _make_mcp() -> MCPServer:
         /tmp/x509up_u<uid> path. Set X509_CERT_DIR for SSL cert verification.
         """
         endpoint = os.environ.get("AMI_ENDPOINT", "atlas-replica")
-        client = pyAMI.client.Client(endpoint)
-        yield {"ami_client": client}
+        factory = EnvBasedClientFactory(client=pyAMI.client.Client(endpoint))
+        try:
+            yield {"client_factory": factory}
+        finally:
+            factory.close()
 
     mcp = MCPServer("ami-mcp", lifespan=_lifespan, instructions=_INSTRUCTIONS)
 

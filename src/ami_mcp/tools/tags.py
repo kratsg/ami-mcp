@@ -10,6 +10,7 @@ from ami_mcp.tools._helpers import (
     append_next_actions,
     format_ami_result,
     format_error,
+    get_ami_client,
     run_ami_sync,
 )
 
@@ -31,7 +32,7 @@ def register(mcp: MCPServer) -> None:
         Args:
             tag: AMI tag string, e.g. "e8351", "s3681", "p5855".
         """
-        client = ctx.request_context.lifespan_context["ami_client"]
+        client = get_ami_client(ctx)
 
         # Accept a full tag chain (e.g. "e8351_s3681_r13144") — look up the first tag
         # and note the remaining ones so the caller can look them up separately.

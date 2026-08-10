@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.server.mcpserver import Context, MCPServer  # noqa: TC002
 
-from ami_mcp.tools._helpers import run_ami_sync
+from ami_mcp.tools._helpers import get_ami_client, run_ami_sync
 from ami_mcp.tools.xsecdb import _get_xsec_path, _parse_db_file
 
 if TYPE_CHECKING:
@@ -124,7 +124,7 @@ def register(mcp: MCPServer) -> None:
             database: Optional PMG xsec DB file or campaign (e.g. "mc16", "mc23").
                 If provided, cross-section metadata is compared against the DB.
         """
-        client = ctx.request_context.lifespan_context["ami_client"]
+        client = get_ami_client(ctx)
 
         ldn_list = [ln.strip() for ln in datasets.splitlines() if ln.strip()]
         if not ldn_list:
