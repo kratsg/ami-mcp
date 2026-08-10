@@ -58,6 +58,7 @@ repos:
         additional_dependencies:
           - pytest
           - mcp==2.0.0
+          - af-credentials==0.1.0
 
   - repo: https://github.com/codespell-project/codespell
     rev: "v2.4.3"
