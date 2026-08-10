@@ -30,7 +30,7 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-  "mcp>=1.0",
+  "mcp>=1.0,<2",
 ]
 
 [project.scripts]
@@ -76,7 +76,10 @@ addopts = ["-ra", "--showlocals", "--strict-markers", "--strict-config", "--doct
 strict = true
 filterwarnings = [
   "error",
-  "ignore:invalid escape sequence",
+  # mcp 1.28 FastMCP Settings trips pydantic-settings>=2.15's forward-ref
+  # check at construction time; goes away with the mcp v2 (MCPServer) port.
+  # (message-matched: the warning class only exists in pydantic-settings>=2.15)
+  "ignore:Field 'lifespan' has an incomplete definition",
 ]
 log_level = "INFO"
 testpaths = [
