@@ -1,0 +1,35 @@
+"""Static shared-secret bearer verification for HTTP transport.
+
+In shared-secret mode the server exposes a single pre-authenticated pyAMI
+client (built from env vars, like stdio — e.g. a server-managed VOMS proxy)
+over HTTP, gated by a server-wide bearer secret. This module provides the
+``TokenVerifier`` that checks incoming bearer tokens against that secret; no
+OAuth flow is involved.
+"""
+
+from __future__ import annotations
+
+import secrets
+
+from mcp.server.auth.provider import AccessToken, TokenVerifier
+
+
+class SharedSecretVerifier(TokenVerifier):
+    """Verify the static server-wide bearer secret in constant time."""
+
+    def __init__(self, secret: str) -> None:
+        """Store the shared secret every request must present."""
+        self._secret = secret
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        """Return an AccessToken if *token* matches the secret, else None."""
+        # Compare as UTF-8 bytes: compare_digest raises TypeError on
+        # non-ASCII str input, which would surface as an HTTP 500.
+        if secrets.compare_digest(token.encode(), self._secret.encode()):
+            return AccessToken(
+                token=token,
+                client_id="shared-secret",
+                scopes=[],
+                expires_at=None,
+            )
+        return None
