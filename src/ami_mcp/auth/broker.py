@@ -85,6 +85,7 @@ class BrokerProxyClientFactory(AmiClientFactory):
     """
 
     def __init__(self, proxy_client: Any, *, endpoint: str) -> None:
+        """Store the redeem client and the pyAMI endpoint to target."""
         self._proxy_client = proxy_client
         self._endpoint = endpoint
 
