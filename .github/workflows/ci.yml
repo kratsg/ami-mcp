@@ -25,8 +25,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: prefix-dev/setup-pixi@v0.9.6
+      - uses: prefix-dev/setup-pixi@v0.10.0
         with:
+          pixi-version: v0.68.1
           cache: true
           cache-key: dev
           cache-write:
@@ -38,25 +39,6 @@ jobs:
 
       - name: Run PyLint
         run: pixi run pylint --output-format=github
-
-  build:
-    name: Build package
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - uses: prefix-dev/setup-pixi@v0.9.6
-        with:
-          cache: true
-          cache-key: dev-${{ github.ref_name }}
-          cache-write:
-            ${{ github.event_name == 'push' && github.ref_name == 'main' }}
-          environments: dev
-
-      - name: Build and check package
-        run: pixi run build-check
 
   checks:
     name: Check Python ${{ matrix.python-version }} on ${{ matrix.runs-on }}
@@ -78,8 +60,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: prefix-dev/setup-pixi@v0.9.6
+      - uses: prefix-dev/setup-pixi@v0.10.0
         with:
+          pixi-version: v0.68.1
           cache: true
           cache-key: ${{ matrix.pixi-environment }}-${{ github.ref_name }}
           cache-write:
