@@ -1,0 +1,51 @@
+ami-mcp has been deployed in {{ .Values.auth.mode }} mode.
+
+MCP endpoint path: /mcp/
+{{- if .Values.ingress.enabled }}
+
+Public URL: https://{{ .Values.ingress.host }}
+  MCP endpoint: https://{{ .Values.ingress.host }}/mcp/
+{{- else }}
+
+No ingress configured. Reach the service in-cluster:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "ami-mcp.fullname" . }} 8080:{{ .Values.service.port }}
+  # then http://127.0.0.1:8080/mcp/
+{{- end }}
+
+{{- if eq .Values.auth.mode "broker" }}
+
+Broker mode: bearers are AF-broker-issued JWTs verified against
+{{ .Values.auth.broker.brokerUrl }}; a per-user VOMS proxy is redeemed per
+call and the server itself holds no AMI credential.
+{{- else }}
+
+Shared-secret mode: clients must send the bearer token, and every request
+shares the server's env-configured AMI identity (the mounted VOMS proxy).
+{{- if .Values.auth.sharedSecret.existingSecret }}
+  Token source: existing Secret {{ .Values.auth.sharedSecret.existingSecret }} (key "shared-secret").
+{{- else }}
+  Retrieve the generated token with:
+    kubectl -n {{ .Release.Namespace }} get secret {{ include "ami-mcp.sharedSecretName" . }} \
+      -o jsonpath='{.data.shared-secret}' | base64 -d; echo
+{{- end }}
+{{- if not .Values.auth.sharedSecret.x509.existingSecret }}
+
+  WARNING: no auth.sharedSecret.x509.existingSecret is configured — the server
+  has no VOMS proxy and AMI queries will fail until one is provided.
+{{- end }}
+
+  Example MCP client config:
+    {
+      "mcpServers": {
+        "ami": {
+          "type": "http",
+          "url": "https://{{ .Values.ingress.host }}/mcp/",
+          "headers": { "Authorization": "Bearer <token>" }
+        }
+      }
+    }
+{{- end }}
+
+Verify the rollout:
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "ami-mcp.fullname" . }}
+  helm test {{ .Release.Name }} -n {{ .Release.Namespace }}

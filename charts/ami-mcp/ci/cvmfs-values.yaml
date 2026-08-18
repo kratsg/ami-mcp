@@ -1,0 +1,21 @@
+# CI/smoke values: shared-secret mode with CVMFS mounted via the generic
+# extraVolumes/extraVolumeMounts passthrough for the PMG cross-section DB.
+ingress:
+  host: ami-mcp.example.com
+auth:
+  mode: sharedSecret
+  sharedSecret:
+    secretValue: dummy-ci-secret
+    x509:
+      existingSecret: ami-x509
+      proxyKey: proxy
+ami:
+  pmgXsecPath: /cvmfs/atlas.cern.ch/repo/sw/database/GroupData/dev/PMGTools
+extraVolumes:
+  - name: cvmfs
+    persistentVolumeClaim:
+      claimName: cvmfs
+extraVolumeMounts:
+  - name: cvmfs
+    mountPath: /cvmfs
+    mountPropagation: HostToContainer

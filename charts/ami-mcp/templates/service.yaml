@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ami-mcp.fullname" . }}
+  labels:
+    {{- include "ami-mcp.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: http
+      protocol: TCP
+      port: {{ .Values.service.port }}
+      targetPort: http
+  selector:
+    {{- include "ami-mcp.selectorLabels" . | nindent 4 }}
