@@ -1234,6 +1234,18 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/2e/86/05ab1a1a40fd82aa574f7b307b4114b547975585796856f4a947112c9e36/pyami_atlas-5.1.10-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/62/b0/83f481780d1548750b8ce2ec824073deef2f452d9cd1a6faff8507e3d16d/lxml-6.1.1-cp311-cp311-macosx_10_9_universal2.whl
       - pypi: https://files.pythonhosted.org/packages/ef/bb/d2207a263386fe0c73947034531a614e71a458a2a4dde22f276b350977b0/pyami_core-5.1.10-py2.py3-none-any.whl
+  helm:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages:
+      linux-64:
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/kubernetes-helm-4.2.4-h519d9b9_0.conda
+      linux-aarch64:
+      - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/kubernetes-helm-4.2.4-h8f1e559_0.conda
+      osx-64:
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/kubernetes-helm-4.2.4-h1762f63_0.conda
+      osx-arm64:
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/kubernetes-helm-4.2.4-h30cdf38_0.conda
   py310:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
@@ -3526,6 +3538,14 @@ packages:
     - icu >=78.3,<79.0a0
   size: 14455340
   timestamp: 1784916378180
+- conda: https://conda.anaconda.org/conda-forge/linux-64/kubernetes-helm-4.2.4-h519d9b9_0.conda
+  sha256: 1f512ad5c4a2698ced5da60721c5602454207a98b5b456d7f19ffab0eaa037fc
+  md5: 1291b3b3949d3695ba847e7a03eafd55
+  license: Apache-2.0
+  license_family: Apache
+  run_exports: {}
+  size: 14623498
+  timestamp: 1786687441065
 - conda: https://conda.anaconda.org/conda-forge/linux-64/ld_impl_linux-64-2.45.1-default_hbd61a6d_102.conda
   sha256: 3d584956604909ff5df353767f3a2a2f60e07d070b328d109f30ac40cd62df6c
   md5: 18335a698559cdbcd86150a48bf54ba6
@@ -4964,6 +4984,14 @@ packages:
   purls: []
   size: 12837286
   timestamp: 1773822650615
+- conda: https://conda.anaconda.org/conda-forge/linux-aarch64/kubernetes-helm-4.2.4-h8f1e559_0.conda
+  sha256: b9f4b3531ba7ef4085c6ac19a0998b5f76a1f263ae038a1ed2847a9c324e5c2d
+  md5: 3865652662352dae2f4423d238d56f35
+  license: Apache-2.0
+  license_family: Apache
+  run_exports: {}
+  size: 12872431
+  timestamp: 1786696053717
 - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/ld_impl_linux-aarch64-2.45.1-default_h1979696_102.conda
   sha256: 7abd913d81a9bf00abb699e8987966baa2065f5132e37e815f92d90fc6bba530
   md5: a21644fc4a83da26452a718dc9468d5f
@@ -8426,6 +8454,16 @@ packages:
     - gsoap >=2.8.123,<2.8.124.0a0
   size: 1844166
   timestamp: 1662007947987
+- conda: https://conda.anaconda.org/conda-forge/osx-64/kubernetes-helm-4.2.4-h1762f63_0.conda
+  sha256: e3cb070fe116fddd3e946aa865213febd371192cc28e8abfe837ba38b4eada52
+  md5: 176e530acad224989a5bed6268223a27
+  constrains:
+  - __osx>=10.12
+  license: Apache-2.0
+  license_family: Apache
+  run_exports: {}
+  size: 14938962
+  timestamp: 1786688371856
 - conda: https://conda.anaconda.org/conda-forge/osx-64/libcxx-22.1.2-h19cb2f5_0.conda
   sha256: 46561199545890e050a8a90edcfce984e5f881da86b09388926e3a6c6b759dec
   md5: ed6f7b7a35f942a0301e581d72616f7d
@@ -9535,6 +9573,14 @@ packages:
   purls: []
   size: 12361647
   timestamp: 1773822915649
+- conda: https://conda.anaconda.org/conda-forge/osx-arm64/kubernetes-helm-4.2.4-h30cdf38_0.conda
+  sha256: 99eacd45bb317b1069b98d7d183fb008dd3727969e2dfac2a21e186fe58e89ec
+  md5: 201449bf785f5eaf35bb110348378aef
+  license: Apache-2.0
+  license_family: Apache
+  run_exports: {}
+  size: 13655671
+  timestamp: 1786687948163
 - conda: https://conda.anaconda.org/conda-forge/osx-arm64/libcxx-22.1.2-h55c6f16_0.conda
   sha256: d1402087c8792461bfc081629e8aa97e6e577a31ae0b84e6b9cc144a18f48067
   md5: 4280e0a7fd613b271e022e60dea0138c

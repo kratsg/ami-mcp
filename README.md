@@ -151,6 +151,20 @@ or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
 <!-- --8<-- [end:quick-start] -->
 
+<!-- --8<-- [start:deployment] -->
+
+## Deploying on Kubernetes
+
+A Helm chart at [`charts/ami-mcp`](charts/ami-mcp) deploys the server over HTTP
+transport in either shared-secret (server-managed VOMS proxy + static bearer) or
+AF-credential-broker (per-user proxies) mode. See
+[Deploying with Helm](https://ami-mcp.readthedocs.io/en/latest/helm/) for the
+full guide. For running the server directly on a facility (e.g. the UChicago
+Analysis Facility), see the contributor guide
+([`CLAUDE.md`](CLAUDE.md#testing-on-the-uchicago-analysis-facility)).
+
+<!-- --8<-- [end:deployment] -->
+
 <!-- --8<-- [start:tools] -->
 
 ## Available tools

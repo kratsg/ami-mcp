@@ -78,6 +78,19 @@ docs-serve = { cmd = "zensical serve", depends-on = ["docs-build"], description 
 docs-clean = { cmd = "rm -rf site", description = "Clean documentation build artifacts", inputs = ["site"] }
 check-docstrings = { cmd = "pydocstyle src/ami_mcp/", description = "Check docstring style" }
 
+[feature.helm.dependencies]
+kubernetes-helm = "*"
+
+[feature.helm.tasks]
+helm-lint = { cmd = """
+helm lint charts/ami-mcp --set ingress.host=ami-mcp.example.com --set auth.sharedSecret.secretValue=dummy \
+&& helm template shared charts/ami-mcp --set ingress.host=ami-mcp.example.com --set auth.sharedSecret.secretValue=dummy > /dev/null \
+&& helm template broker charts/ami-mcp --set ingress.host=ami-mcp.example.com --set auth.mode=broker --set auth.broker.brokerUrl=https://broker.example.com > /dev/null \
+&& helm template cvmfs charts/ami-mcp -f charts/ami-mcp/ci/cvmfs-values.yaml | grep -q 'mountPropagation: HostToContainer' \
+&& helm template cvmfs charts/ami-mcp -f charts/ami-mcp/ci/cvmfs-values.yaml | grep -q 'claimName: cvmfs'
+""", description = "Lint the ami-mcp Helm chart and smoke-render both auth modes + the CVMFS passthrough" }
+helm-template = { cmd = "helm template a charts/ami-mcp --set ingress.host=ami-mcp.example.com --set auth.sharedSecret.secretValue=dummy", description = "Render the chart with default (shared-secret) values" }
+
 [feature.dev.dependencies]
 pre-commit = "*"
 identify = ">=1.4.20"  # ruff-check
@@ -100,6 +113,7 @@ build-check = { cmd = "twine check --strict ./dist/*", depends-on = ["build"], d
 [environments]
 docs = ["docs"]
 dev = ["dev"]
+helm = { features = ["helm"], no-default-feature = true }
 py310 = ["test", "py310"]
 py311 = ["test", "py311"]
 py312 = ["test", "py312"]

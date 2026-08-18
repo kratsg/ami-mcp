@@ -1,0 +1,191 @@
+# Default values for ami-mcp.
+# This chart deploys ami-mcp over HTTP transport in one of two auth models,
+# selected by auth.mode (see the "auth" block below).
+
+# -- Container image. There is no published ami-mcp image; the chart runs the
+# prefix-dev pixi image and installs ami-mcp at pod startup (see initContainer).
+image:
+  repository: ghcr.io/prefix-dev/pixi
+  tag: "0.69.0-jammy"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# -- ami-mcp release pinned into the rendered pixi.toml at /workspace.
+amiMcp:
+  # Conda-forge version of ami-mcp to install (==<version>).
+  version: "0.2.2"
+  # Extra conda-forge dependencies merged into the rendered pixi.toml, as a
+  # name -> version-spec map. ami-mcp already pulls in af-credentials (broker
+  # mode) and ca-policy-lcg (sets X509_CERT_DIR on env activation); pin one
+  # here (e.g. {ca-policy-lcg: "*"}) only to force the latest CA bundle.
+  extraPixiDependencies: {}
+  # Frozen pixi.lock content for reproducible installs. Empty by default (a
+  # release must exist before it can be locked). Supply with, e.g.:
+  #   helm install ... --set-file amiMcp.pixiLockContent=pixi.lock
+  # When set, the lock is mounted alongside pixi.toml and pixi installs from it.
+  pixiLockContent: ""
+
+replicaCount: 1
+
+# -- ami-mcp / uvicorn log level: debug | info | warning | error.
+logLevel: info
+
+# -- IPs trusted for X-Forwarded-* headers. "*" trusts the in-cluster ingress.
+forwardedAllowIps: "*"
+
+server:
+  # Bind address inside the pod.
+  host: "0.0.0.0"
+  # Container port for the MCP HTTP endpoint (also serves /healthz).
+  port: 8000
+  # Public URL clients reach the server at (--resource-url). If empty, it is
+  # derived as https://<ingress.host> when the ingress is enabled, else the
+  # server falls back to http://<host>:<port>.
+  resourceUrl: ""
+
+ami:
+  # AMI server endpoint (AMI_ENDPOINT). atlas-replica is the read-only replica
+  # recommended for queries.
+  endpoint: atlas-replica
+  # Directory of PMGxsecDB_<campaign>.txt files (ATLAS_PMGXSEC_PATH). Empty =
+  # the server's built-in default (the CVMFS PMGTools directory). Only useful
+  # inside the pod when a volume provides it — see extraVolumes below.
+  pmgXsecPath: ""
+
+# -- Extra volumes / volume mounts rendered verbatim into the pod spec and the
+# ami-mcp container (any corev1.Volume / corev1.VolumeMount, incl. fields like
+# mountPropagation). This is how CVMFS gets mounted for the PMG cross-section
+# DB (off by default — without it the xsec tools report the path unavailable;
+# all AMI tools still work). E.g. via a CVMFS CSI PVC:
+#   extraVolumes:
+#     - name: cvmfs
+#       persistentVolumeClaim:
+#         claimName: cvmfs
+#   extraVolumeMounts:
+#     - name: cvmfs
+#       mountPath: /cvmfs
+#       mountPropagation: HostToContainer
+# paired with ami.pmgXsecPath pointing inside the mount, e.g.
+# /cvmfs/atlas.cern.ch/repo/sw/database/GroupData/dev/PMGTools.
+extraVolumes: []
+extraVolumeMounts: []
+
+# Auth model — the core switch between the two supported deployment shapes.
+auth:
+  # "sharedSecret": single env-built pyAMI client (a server-managed VOMS proxy)
+  #   gated by a static bearer token.
+  # "broker": AF credential broker — verifies broker-issued JWTs and redeems a
+  #   per-user VOMS proxy per call. The server holds no AMI credential itself.
+  mode: sharedSecret
+
+  # Settings used only when mode == "sharedSecret".
+  sharedSecret:
+    # Name of a Secret holding the bearer under key "shared-secret". If empty,
+    # the chart creates one from secretValue below.
+    existingSecret: ""
+    # Bearer value, used only when existingSecret is empty. Generate with, e.g.,
+    # `openssl rand -hex 32`. Prefer existingSecret in production.
+    secretValue: ""
+    # x509 credential material, supplied via a user-managed Secret. pyAMI reads
+    # only a VOMS proxy (X509_USER_PROXY); refresh the proxy in the Secret
+    # out-of-band — the chart only consumes it.
+    x509:
+      # Name of an existing Secret containing the proxy file (and any extra
+      # material, e.g. the robot cert/key an out-of-band refresher uses).
+      existingSecret: ""
+      # Key in existingSecret holding the VOMS proxy -> X509_USER_PROXY.
+      proxyKey: ""
+      # Directory the Secret is mounted at (read-only).
+      mountPath: /etc/grid-security/ami
+    # Optional override for X509_CERT_DIR (the CA trust dir). Usually unset —
+    # ami-mcp's bundled ca-policy-lcg sets it automatically.
+    x509CertDir: ""
+
+  # Settings used only when mode == "broker".
+  broker:
+    # AF credential broker base URL (required; env AMI_MCP_BROKER_URL).
+    brokerUrl: ""
+    # JWKS URL for verifying broker-issued JWTs. Empty = derived by the server
+    # as <brokerUrl>/.well-known/jwks.json.
+    jwksUrl: ""
+    # Expected iss claim of broker-issued JWTs. Empty = brokerUrl.
+    issuer: ""
+    # Expected aud claim of broker-issued JWTs.
+    audience: "ami"
+
+# -- Extra environment variables for the main container (free-form list of
+# corev1.EnvVar). Use for settings the chart does not template.
+extraEnv: []
+
+ingress:
+  enabled: true
+  className: nginx
+  # External hostname. Also used to derive server.resourceUrl when unset.
+  host: ""
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  tls:
+    enabled: true
+    # TLS Secret name. Defaults to <fullname>-tls when empty.
+    secretName: ""
+
+service:
+  type: ClusterIP
+  # External service port mapped to server.port.
+  port: 80
+
+serviceAccount:
+  create: false
+  name: ""
+  annotations: {}
+
+# NOTE: ami-mcp exposes no /metrics endpoint yet, so the chart ships no
+# ServiceMonitor or Grafana dashboard. Add them once the server grows a
+# Prometheus endpoint.
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+
+# Resources for the pixi-install init container (install is the heavy step).
+initResources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# -- Pod-level securityContext (rendered as-is via toYaml). Empty by default;
+# add fields like `fsGroup` here if your cluster requires them.
+podSecurityContext: {}
+
+# -- Container-level securityContext (rendered as-is via toYaml), applied to
+# both the pixi-install init container and the main container. Defaults are
+# safe no-ops for this workload: the init container runs `pixi install` and
+# the main container runs `pixi shell-hook` against /workspace (an emptyDir),
+# both of which currently expect to run as the image's default user (root) and
+# may write outside /workspace (e.g. pixi/conda caches under $HOME). Do NOT
+# default `runAsNonRoot: true` or `readOnlyRootFilesystem: true` without first
+# verifying the pixi image + install flow tolerates them.
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
+  # Stricter options to consider once verified against your pixi image/setup:
+  # runAsNonRoot: true
+  # readOnlyRootFilesystem: true
