@@ -10,7 +10,7 @@ ami-mcp = { path = "./" }
 setuptools = "*"
 # Broker-mode client library (its [mcp] extra's mcp dependency is already a
 # direct dependency of ami-mcp itself)
-af-credentials = ">=0.1.0"
+af-credentials = ">=0.1.1"
 
 [package]
 name = "ami-mcp"
