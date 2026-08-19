@@ -2,9 +2,39 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import patch
 
-from ami_mcp.server import _preflight_check
+import pytest
+
+from ami_mcp.server import _configure_logging, _preflight_check
+
+
+class TestConfigureLogging:
+    @pytest.fixture(autouse=True)
+    def _restore_root_level(self):
+        """Restore the root logger level so tests don't leak configuration."""
+        root = logging.getLogger()
+        original = root.level
+        yield
+        root.setLevel(original)
+
+    def test_debug_enables_library_debug_logging(self) -> None:
+        """--log-level debug must reach library loggers, not just uvicorn's."""
+        _configure_logging("debug")
+        assert logging.getLogger("af_credentials.verifier").isEnabledFor(logging.DEBUG)
+
+    def test_info_does_not_enable_debug(self) -> None:
+        _configure_logging("info")
+        verifier = logging.getLogger("af_credentials.verifier")
+        assert not verifier.isEnabledFor(logging.DEBUG)
+        assert verifier.isEnabledFor(logging.INFO)
+
+    def test_warning_silences_info(self) -> None:
+        _configure_logging("warning")
+        verifier = logging.getLogger("af_credentials.verifier")
+        assert not verifier.isEnabledFor(logging.INFO)
+        assert verifier.isEnabledFor(logging.WARNING)
 
 
 class TestPreflightCheck:

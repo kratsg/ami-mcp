@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from contextlib import asynccontextmanager
@@ -90,6 +91,22 @@ def _preflight_check() -> None:
 
     for w in warnings:
         sys.stderr.write(f"[ami-mcp] WARNING: {w}\n")
+
+
+def _configure_logging(log_level: str) -> None:
+    """Apply the CLI log level to the root logger.
+
+    ``uvicorn.run(log_level=...)`` configures only uvicorn's own loggers, so
+    library loggers (e.g. af_credentials.verifier's DEBUG token-rejection
+    reasons, mcp SDK internals) would otherwise never reach a handler.
+    basicConfig attaches a stderr handler only if none exists; the level is
+    set explicitly so it applies even when a handler is already configured.
+    """
+    logging.basicConfig(
+        stream=sys.stderr,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+    logging.getLogger().setLevel(log_level.upper())
 
 
 def _register_all(mcp: MCPServer) -> None:
@@ -297,6 +314,9 @@ def serve(
             host=host,
         )
 
+    # HTTP transport only: stdio uses stdout for the MCP protocol and gets no
+    # root logging configuration, matching where log_level is honored today.
+    _configure_logging(log_level)
     uvicorn.run(
         app,
         host=host,
