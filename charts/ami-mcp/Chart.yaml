@@ -10,7 +10,7 @@ type: application
 version: 0.1.0
 # ami-mcp release the chart deploys by default (pinned into the rendered
 # pixi.toml). Override with amiMcp.version in values.
-appVersion: "0.2.2"
+appVersion: "0.2.3"
 keywords:
   - ami
   - mcp

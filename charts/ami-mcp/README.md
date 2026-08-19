@@ -45,7 +45,7 @@ helm install ami-mcp ./charts/ami-mcp \
 | `image.tag`                                 | `0.69.0-jammy`            | pixi image tag                                                         |
 | `image.pullPolicy`                          | `IfNotPresent`            | Image pull policy                                                      |
 | `imagePullSecrets`                          | `[]`                      | Pull secrets for the pixi image                                        |
-| `amiMcp.version`                            | `0.2.2`                   | ami-mcp release pinned into the rendered `pixi.toml`                   |
+| `amiMcp.version`                            | `0.2.3`                   | ami-mcp release pinned into the rendered `pixi.toml`                   |
 | `amiMcp.extraPixiDependencies`              | `{}`                      | Extra conda-forge deps merged into `pixi.toml` (name -> spec)          |
 | `amiMcp.pixiLockContent`                    | `""`                      | Frozen `pixi.lock` for reproducible installs (`--set-file`)            |
 | `replicaCount`                              | `1`                       | Deployment replicas                                                    |
