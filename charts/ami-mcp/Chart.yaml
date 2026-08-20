@@ -6,8 +6,8 @@ description: |
   shared-secret (single pre-authenticated client) and AF credential broker
   (per-user VOMS proxies) auth models.
 type: application
-# Chart version — bump on chart changes, independent of the app version.
-version: 0.1.0
+# Chart version, kept in lockstep with appVersion by tbump.toml.
+version: 0.2.3
 # ami-mcp release the chart deploys by default (pinned into the rendered
 # pixi.toml). Override with amiMcp.version in values.
 appVersion: "0.2.3"
