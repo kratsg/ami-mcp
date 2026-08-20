@@ -7,10 +7,10 @@ description: |
   (per-user VOMS proxies) auth models.
 type: application
 # Chart version, kept in lockstep with appVersion by tbump.toml.
-version: 0.2.3
+version: 0.2.4
 # ami-mcp release the chart deploys by default (pinned into the rendered
 # pixi.toml). Override with amiMcp.version in values.
-appVersion: "0.2.3"
+appVersion: "0.2.4"
 keywords:
   - ami
   - mcp

@@ -14,7 +14,7 @@ imagePullSecrets: []
 # -- ami-mcp release pinned into the rendered pixi.toml at /workspace.
 amiMcp:
   # Conda-forge version of ami-mcp to install (==<version>).
-  version: "0.2.3"
+  version: "0.2.4"
   # Extra conda-forge dependencies merged into the rendered pixi.toml, as a
   # name -> version-spec map. ami-mcp already pulls in af-credentials (broker
   # mode) and ca-policy-lcg (sets X509_CERT_DIR on env activation); pin one
