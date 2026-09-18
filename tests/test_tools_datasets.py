@@ -540,3 +540,155 @@ class TestAmiListDatasets:
         assert "**Error**:" in output
         assert "wildcard" in output.lower() or "%" in output
         assert result.is_error is True
+
+    async def test_returns_structured_content_with_rows(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+        tool_text: Callable[[CallToolResult], str],
+    ) -> None:
+        rows = [
+            OrderedDict(
+                [
+                    (
+                        "logicalDatasetName",
+                        "mc20_13TeV.700320.Sh_2211_Zee.deriv.DAOD_PHYS.e8351_p5855",
+                    ),
+                    ("physicsShort", "Sh_2211_Zee"),
+                    ("amiStatus", "VALID"),
+                ]
+            )
+        ]
+        result_mock = _make_result_mock(rows)
+        with patch(
+            "ami_mcp.tools.datasets.run_ami_command",
+            new=AsyncMock(return_value=result_mock),
+        ):
+            fn = registered_tools["ami_list_datasets"]
+            result = await fn(
+                patterns="%Zee%",
+                project="mc20_13TeV",
+                data_type="DAOD_PHYS",
+                ctx=mock_ctx,
+            )
+
+        output = tool_text(result)
+        assert "Sh_2211_Zee" in output
+        assert result.is_error is not True
+        assert result.structured_content is not None
+        assert result.structured_content["catalog"] == "mc20_001:production"
+        assert result.structured_content["ami_status"] == "VALID"
+        assert result.structured_content["total"] == 1
+        assert result.structured_content["rows"][0]["physicsShort"] == "Sh_2211_Zee"
+
+
+class TestAmiListDatasetsCatalogSelection:
+    @pytest.mark.parametrize(
+        ("project", "data_type", "expected_catalog"),
+        [
+            # The exact #24 repro: mc20 derivation must search mc20's own
+            # catalog, not the evgen-only mc15 catalog.
+            ("mc20_13TeV", "DAOD_PHYSLITE", "mc20_001:production"),
+            ("mc20_13TeV", "DAOD_PHYS", "mc20_001:production"),
+            ("mc20_13TeV", "AOD", "mc20_001:production"),
+            ("mc20_13TeV", None, "mc20_001:production"),
+            ("mc20_13TeV", "EVNT", "mc15_001:production"),
+            ("mc20_13TeV", "HITS", "mc16_001:production"),
+            ("mc16_13TeV", "EVNT", "mc15_001:production"),
+            ("mc16_13TeV", "AOD", "mc16_001:production"),
+            ("mc23_13p6TeV", "EVNT", "mc23_001:production"),
+            ("mc23_13p6TeV", "DAOD_PHYS", "mc23_001:production"),
+        ],
+    )
+    async def test_selects_catalog_by_project_and_data_type(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+        project: str,
+        data_type: str | None,
+        expected_catalog: str,
+    ) -> None:
+        result_mock = _make_result_mock([])
+        executed_commands: list[str] = []
+
+        async def capture(_func, *args, **_kwargs):
+            executed_commands.append(str(args[0]))
+            return result_mock
+
+        with patch("ami_mcp.tools.datasets.run_ami_command", new=capture):
+            fn = registered_tools["ami_list_datasets"]
+            await fn(
+                patterns="%Zee%", project=project, data_type=data_type, ctx=mock_ctx
+            )
+
+        assert f"-catalog={expected_catalog}" in executed_commands[0]
+
+    async def test_ami_status_default_is_valid(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        result_mock = _make_result_mock([])
+        executed_commands: list[str] = []
+
+        async def capture(_func, *args, **_kwargs):
+            executed_commands.append(str(args[0]))
+            return result_mock
+
+        with patch("ami_mcp.tools.datasets.run_ami_command", new=capture):
+            fn = registered_tools["ami_list_datasets"]
+            await fn(patterns="%Zee%", project="mc20_13TeV", ctx=mock_ctx)
+
+        assert "amiStatus = 'VALID'" in executed_commands[0]
+
+    async def test_ami_status_none_omits_status_filter(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        result_mock = _make_result_mock([])
+        executed_commands: list[str] = []
+
+        async def capture(_func, *args, **_kwargs):
+            executed_commands.append(str(args[0]))
+            return result_mock
+
+        with patch("ami_mcp.tools.datasets.run_ami_command", new=capture):
+            fn = registered_tools["ami_list_datasets"]
+            await fn(
+                patterns="%Zee%",
+                project="mc20_13TeV",
+                ami_status=None,
+                ctx=mock_ctx,
+            )
+
+        # amiStatus is still SELECTed (a display column); it must simply not
+        # appear as a WHERE condition.
+        assert "amiStatus =" not in executed_commands[0]
+
+    async def test_empty_result_hints_name_catalog_and_status(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+        tool_text: Callable[[CallToolResult], str],
+    ) -> None:
+        result_mock = _make_result_mock([])
+        with patch(
+            "ami_mcp.tools.datasets.run_ami_command",
+            new=AsyncMock(return_value=result_mock),
+        ):
+            fn = registered_tools["ami_list_datasets"]
+            result = await fn(
+                patterns="%Zee%",
+                project="mc20_13TeV",
+                data_type="DAOD_PHYSLITE",
+                ctx=mock_ctx,
+            )
+
+        output = tool_text(result)
+        assert "mc20_001:production" in output
+        assert "VALID" in output
+        assert 'data_type="EVNT"' in output
+        assert result.structured_content is not None
+        assert result.structured_content["catalog"] == "mc20_001:production"
+        assert result.structured_content["total"] == 0

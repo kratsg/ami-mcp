@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from ami_mcp.tools._helpers import (
     append_next_actions,
+    data_type_to_prod_step,
     format_ami_result,
     format_error,
     rows_to_dicts,
@@ -60,6 +61,8 @@ class AmiListDatasetsResult(BaseModel):
 
     patterns: str
     project: str
+    catalog: str
+    ami_status: str | None
     rows: list[dict[str, Any]]
     total: int
 
@@ -332,6 +335,7 @@ def register(mcp: MCPServer) -> None:
         project: str,
         fields: str | None = None,
         data_type: str | None = None,
+        ami_status: str | None = "VALID",
         limit: int = 100,
         *,
         ctx: Context[Any, Any],
@@ -345,6 +349,18 @@ def register(mcp: MCPServer) -> None:
         logicalDatasetName. Filter on physicsShort instead, e.g. "%Zee%" to
         find Zee datasets. The project is required to select the correct catalog.
 
+        The catalog searched depends on both project and data_type: EVNT/HEPMC
+        datasets live in the campaign's evgen catalog (e.g. mc20_13TeV EVNT is
+        in mc15_001:production -- generated with mc15-era job options), HITS
+        in the sim catalog, and everything else (including when data_type is
+        omitted) in the campaign's own reco/derivation catalog (e.g.
+        mc20_13TeV DAOD_PHYS is in mc20_001:production). Omitting data_type
+        assumes a derivation search; pass data_type="EVNT" to reach the evgen
+        catalog instead.
+
+        Results are filtered to amiStatus="VALID" by default; pass
+        ami_status=None to see all statuses (e.g. TRASHED, OBSOLETE).
+
         For more control over the query, use ami_execute directly with a
         SearchQuery command (see ami://query-language resource).
 
@@ -353,16 +369,20 @@ def register(mcp: MCPServer) -> None:
             project: ATLAS project/campaign (e.g. "mc20_13TeV", "mc23_13p6TeV").
                 Required to select the correct AMI catalog.
             fields: Comma-separated extra fields to return (e.g. "nFiles,nEvents").
-            data_type: Filter by data type (e.g. "EVNT", "DAOD_PHYS").
+            data_type: Filter by data type (e.g. "EVNT", "DAOD_PHYS"). Also
+                selects the catalog searched -- see above.
+            ami_status: Filter by amiStatus (default "VALID"). Pass None to
+                search regardless of status.
             limit: Maximum number of results to return (default 100).
         """
-        catalog = scope_to_catalog(project)
+        catalog = scope_to_catalog(project, data_type_to_prod_step(data_type))
 
         conditions: list[str] = [
             f"physicsShort LIKE '{patterns}'",
             f"projectName = '{project}'",
-            "amiStatus = 'VALID'",
         ]
+        if ami_status:
+            conditions.append(f"amiStatus = '{ami_status}'")
         if data_type:
             conditions.append(f"dataType = '{data_type}'")
 
@@ -394,9 +414,30 @@ def register(mcp: MCPServer) -> None:
                     "Use `ami_get_physics_params` on an EVNT LDN for cross-section details.",
                 ],
             )
+        else:
+            status_desc = f"amiStatus='{ami_status}'" if ami_status else "any amiStatus"
+            output = append_next_actions(
+                output,
+                [
+                    (
+                        f"Searched catalog `{catalog}` with {status_desc}. "
+                        "No matches there doesn't mean the dataset doesn't exist."
+                    ),
+                    (
+                        'Pass data_type="EVNT" to search the evgen catalog '
+                        "instead of the derivation catalog, or vice versa."
+                    ),
+                    (
+                        "Pass ami_status=None to include non-VALID datasets "
+                        "(TRASHED, OBSOLETE, ...)."
+                    ),
+                ],
+            )
         payload = AmiListDatasetsResult(
             patterns=patterns,
             project=project,
+            catalog=catalog,
+            ami_status=ami_status,
             rows=rows_to_dicts(rows),
             total=len(rows),
         )

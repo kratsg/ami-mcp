@@ -162,30 +162,69 @@ async def run_ami_command(
         return await run_ami_sync(client.execute, command, format=format)
 
 
-# Maps scope strings (e.g. "mc20_13TeV") to their AMI evgen catalog names.
-# mc16 and mc20 evgen datasets are stored in the mc15 catalog because they
-# were generated with mc15-era job options.
+# Maps scope strings (e.g. "mc20_13TeV") to their AMI catalog names, per
+# production step. mc16 and mc20 evgen datasets are stored in the mc15
+# catalog (and mc20 sim datasets in the mc16 catalog) because they were
+# generated with earlier-campaign job options; reco/derivation datasets live
+# in the campaign's own catalog.
 # Source: central-page/new-cp/cli/lib/utils.py scopetag_dict
-_SCOPE_TO_CATALOG: dict[str, str] = {
-    "mc16_13TeV": "mc15_001:production",
-    "mc20_13TeV": "mc15_001:production",
-    "mc21_13p6TeV": "mc21_001:production",
-    "mc23_13p6TeV": "mc23_001:production",
+_SCOPE_TO_CATALOG: dict[str, dict[str, str]] = {
+    "mc16_13TeV": {
+        "evgen": "mc15_001:production",
+        "sim": "mc16_001:production",
+        "reco": "mc16_001:production",
+    },
+    "mc20_13TeV": {
+        "evgen": "mc15_001:production",
+        "sim": "mc16_001:production",
+        "reco": "mc20_001:production",
+    },
+    "mc21_13p6TeV": {
+        "evgen": "mc21_001:production",
+        "sim": "mc21_001:production",
+        "reco": "mc21_001:production",
+    },
+    "mc23_13p6TeV": {
+        "evgen": "mc23_001:production",
+        "sim": "mc23_001:production",
+        "reco": "mc23_001:production",
+    },
 }
 
 
-def scope_to_catalog(scope: str) -> str:
-    """Map an ATLAS scope string to its AMI evgen catalog name.
+def data_type_to_prod_step(data_type: str | None) -> str:
+    """Map an AMI dataType to the production step whose catalog holds it.
+
+    Args:
+        data_type: AMI dataType, e.g. "EVNT", "HITS", "DAOD_PHYS". None (no
+            filter given) is treated as "reco" -- a dataset search with no
+            data_type is most often looking for a derivation, and ami_execute
+            remains available for an evgen-catalog search under full control.
+
+    Returns:
+        One of "evgen", "sim", "reco".
+    """
+    if data_type in ("EVNT", "HEPMC"):
+        return "evgen"
+    if data_type == "HITS":
+        return "sim"
+    return "reco"
+
+
+def scope_to_catalog(scope: str, prod_step: str) -> str:
+    """Map an ATLAS scope string and production step to its AMI catalog name.
 
     Args:
         scope: ATLAS scope string, e.g. "mc20_13TeV".
+        prod_step: One of "evgen", "sim", "reco" (see data_type_to_prod_step).
 
     Returns:
         AMI catalog string, e.g. "mc15_001:production".
-        Falls back to "<shortscope>_001:production" for unknown scopes.
+        Falls back to "<shortscope>_001:production" for unknown scopes,
+        regardless of prod_step.
     """
     if scope in _SCOPE_TO_CATALOG:
-        return _SCOPE_TO_CATALOG[scope]
+        return _SCOPE_TO_CATALOG[scope][prod_step]
     # Best-effort fallback: take the mc-prefix and assume _001:production
     short = scope.split("_", maxsplit=1)[0]
     return f"{short}_001:production"
