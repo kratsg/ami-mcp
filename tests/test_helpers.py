@@ -4,9 +4,16 @@ from __future__ import annotations
 
 from collections import OrderedDict
 
+import pytest
 from mcp.types import CallToolResult
 
-from ami_mcp.tools._helpers import format_ami_result, format_error, rows_to_dicts
+from ami_mcp.tools._helpers import (
+    data_type_to_prod_step,
+    format_ami_result,
+    format_error,
+    rows_to_dicts,
+    scope_to_catalog,
+)
 
 
 class TestFormatAmiResult:
@@ -108,3 +115,50 @@ class TestRowsToDicts:
 
     def test_empty_list_returns_empty_list(self) -> None:
         assert rows_to_dicts([]) == []
+
+
+class TestDataTypeToProdStep:
+    @pytest.mark.parametrize("data_type", ["EVNT", "HEPMC"])
+    def test_evgen_data_types(self, data_type: str) -> None:
+        assert data_type_to_prod_step(data_type) == "evgen"
+
+    def test_hits_is_sim(self) -> None:
+        assert data_type_to_prod_step("HITS") == "sim"
+
+    @pytest.mark.parametrize(
+        "data_type",
+        ["AOD", "DAOD_PHYS", "DAOD_PHYSLITE", "RDO", "ESD"],
+    )
+    def test_derivation_and_reco_types_are_reco(self, data_type: str) -> None:
+        assert data_type_to_prod_step(data_type) == "reco"
+
+    def test_none_defaults_to_reco(self) -> None:
+        assert data_type_to_prod_step(None) == "reco"
+
+
+class TestScopeToCatalog:
+    @pytest.mark.parametrize(
+        ("project", "prod_step", "expected"),
+        [
+            ("mc16_13TeV", "evgen", "mc15_001:production"),
+            ("mc16_13TeV", "sim", "mc16_001:production"),
+            ("mc16_13TeV", "reco", "mc16_001:production"),
+            ("mc20_13TeV", "evgen", "mc15_001:production"),
+            ("mc20_13TeV", "sim", "mc16_001:production"),
+            ("mc20_13TeV", "reco", "mc20_001:production"),
+            ("mc21_13p6TeV", "evgen", "mc21_001:production"),
+            ("mc21_13p6TeV", "sim", "mc21_001:production"),
+            ("mc21_13p6TeV", "reco", "mc21_001:production"),
+            ("mc23_13p6TeV", "evgen", "mc23_001:production"),
+            ("mc23_13p6TeV", "sim", "mc23_001:production"),
+            ("mc23_13p6TeV", "reco", "mc23_001:production"),
+        ],
+    )
+    def test_known_projects(self, project: str, prod_step: str, expected: str) -> None:
+        assert scope_to_catalog(project, prod_step) == expected
+
+    def test_unknown_project_falls_back_to_prefix(self) -> None:
+        assert scope_to_catalog("data22_13p6TeV", "reco") == "data22_001:production"
+
+    def test_unknown_project_falls_back_regardless_of_prod_step(self) -> None:
+        assert scope_to_catalog("data22_13p6TeV", "evgen") == "data22_001:production"
