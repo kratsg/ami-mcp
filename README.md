@@ -169,41 +169,45 @@ Analysis Facility), see the contributor guide
 
 ## Available tools
 
+All tools are read-only (`read_only_hint=true` in their MCP tool annotations)
+and query the external ATLAS AMI service or a local cross-section database
+(`open_world_hint=true`); there is no tool that mutates AMI or facility state.
+
 ### AMI queries
 
-| Tool                   | Description                                                    |
-| ---------------------- | -------------------------------------------------------------- |
-| `ami_execute`          | Execute any AMI command string (primary power tool)            |
-| `ami_get_dataset_info` | Get metadata for a dataset (nFiles, nEvents, status, etc.)     |
-| `ami_get_dataset_prov` | Get provenance chain with lineage summary; filter by data type |
-| `ami_list_datasets`    | Search for datasets by name pattern (supports `%` wildcards)   |
+| Tool                   | Description                                                    | Read/write |
+| ---------------------- | -------------------------------------------------------------- | ---------- |
+| `ami_execute`          | Execute any AMI command string (primary power tool)            | read-only  |
+| `ami_get_dataset_info` | Get metadata for a dataset (nFiles, nEvents, status, etc.)     | read-only  |
+| `ami_get_dataset_prov` | Get provenance chain with lineage summary; filter by data type | read-only  |
+| `ami_list_datasets`    | Search for datasets by name pattern (supports `%` wildcards)   | read-only  |
 
 ### PMG hashtags
 
-| Tool                       | Description                                                          |
-| -------------------------- | -------------------------------------------------------------------- |
-| `ami_search_by_hashtags`   | Find datasets by hashtag combination (e.g. WeakBoson/Vjets/Baseline) |
-| `ami_get_dataset_hashtags` | Look up PMGL1–PMGL4 classification for a dataset                     |
+| Tool                       | Description                                                          | Read/write |
+| -------------------------- | -------------------------------------------------------------------- | ---------- |
+| `ami_search_by_hashtags`   | Find datasets by hashtag combination (e.g. WeakBoson/Vjets/Baseline) | read-only  |
+| `ami_get_dataset_hashtags` | Look up PMGL1–PMGL4 classification for a dataset                     | read-only  |
 
 ### Physics metadata
 
-| Tool                     | Description                                                               |
-| ------------------------ | ------------------------------------------------------------------------- |
-| `ami_get_physics_params` | Get cross-section (nb→pb converted), filter efficiency, k-factor from AMI |
-| `ami_get_ami_tag`        | Get AMI processing tag info; accepts tag chains like `e8351_s3681_r13144` |
+| Tool                     | Description                                                               | Read/write |
+| ------------------------ | ------------------------------------------------------------------------- | ---------- |
+| `ami_get_physics_params` | Get cross-section (nb→pb converted), filter efficiency, k-factor from AMI | read-only  |
+| `ami_get_ami_tag`        | Get AMI processing tag info; accepts tag chains like `e8351_s3681_r13144` | read-only  |
 
 ### Cross-section database
 
-| Tool                      | Description                                                 |
-| ------------------------- | ----------------------------------------------------------- |
-| `ami_list_xsec_databases` | List available PMGxsecDB\_\*.txt files                      |
-| `ami_lookup_xsec`         | Look up DSID cross-section, filter eff, k-factor in xsec DB |
+| Tool                      | Description                                                 | Read/write |
+| ------------------------- | ----------------------------------------------------------- | ---------- |
+| `ami_list_xsec_databases` | List available PMGxsecDB\_\*.txt files                      | read-only  |
+| `ami_lookup_xsec`         | Look up DSID cross-section, filter eff, k-factor in xsec DB | read-only  |
 
 ### Validation
 
-| Tool                  | Description                                                  |
-| --------------------- | ------------------------------------------------------------ |
-| `ami_validate_sample` | Check hashtag classification and compare metadata to xsec DB |
+| Tool                  | Description                                                  | Read/write |
+| --------------------- | ------------------------------------------------------------ | ---------- |
+| `ami_validate_sample` | Check hashtag classification and compare metadata to xsec DB | read-only  |
 
 <!-- --8<-- [end:tools] -->
 
