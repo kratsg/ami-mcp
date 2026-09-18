@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections import OrderedDict
 from typing import Any
 
@@ -15,10 +16,47 @@ from ami_mcp.policy import (
     is_command_allowed,
 )
 
+_log = logging.getLogger(__name__)
+
 _VERTICAL_THRESHOLD = 6
 
 #: Lifespan-context key holding the effective ``ami_execute`` allowlist.
 ALLOWED_COMMANDS_KEY = "allowed_commands"
+
+# pyAMI collapses every failure -- transport-layer and AMI-server-side alike --
+# into a single pyAMI.exception.Error whose message is 'pyAMI exception: %s'
+# (see pyAMI/exception.py and pyAMI/object.py's <error>-element handling).
+# There is no exception subclass to catch, so a transient connection failure
+# can only be told apart from a semantic AMI error (bad command, invalid
+# format, ...) by substring-matching its message. Ugly, but it's what pyAMI
+# gives us. Matched case-insensitively against str(exc).
+_TRANSIENT_PATTERNS: tuple[str, ...] = (
+    "no more data to read from socket",
+    "closed connection",
+    "connection reset",
+    "broken pipe",
+    "eof occurred",
+    "could not connect to",
+    "service temporarily unreachable",
+    "timed out",
+)
+
+# Number of attempts (including the first) run_ami_command makes by default,
+# and the delay between them. Retrying is only safe because every ami-mcp
+# tool is a read-only AMI query -- a write tool would need to reason about
+# whether a failed attempt already had a side effect before retrying.
+_DEFAULT_ATTEMPTS = 2
+_DEFAULT_RETRY_DELAY_S = 0.5
+
+
+def is_transient(exc: Exception) -> bool:
+    """Return True if *exc* looks like a transient pyAMI connection failure.
+
+    See the ``_TRANSIENT_PATTERNS`` comment for why this is a substring match
+    rather than an exception-type check.
+    """
+    message = str(exc).lower()
+    return any(pattern in message for pattern in _TRANSIENT_PATTERNS)
 
 
 def format_ami_result(rows: list[Any], max_rows: int = 100) -> str:
@@ -80,6 +118,12 @@ def append_next_actions(output: str, hints: list[str]) -> str:
     return f"{output}\n\n---\n**Next steps:**\n{hint_lines}"
 
 
+_TRANSIENT_HINT = (
+    "This looks like a transient AMI connection error; the call was already "
+    "retried internally. Try again."
+)
+
+
 def format_error(
     exc: Exception,
     context: str = "",
@@ -91,6 +135,13 @@ def format_error(
     payload (mcp SDK's ``convert_result`` only validates ``structured_content``
     against the tool's output model when ``is_error`` is false).
 
+    When *exc* looks like a transient pyAMI connection error (see
+    ``is_transient``), a hint saying so is prepended ahead of the caller's own
+    hints -- ``run_ami_command`` already retried it once, so this is the point
+    where that failure surfaces and the one useful piece of advice ("try
+    again") applies to every tool alike, not just the one that happened to
+    catch it.
+
     Args:
         exc: The exception that was raised.
         context: Optional additional context about what failed.
@@ -100,12 +151,15 @@ def format_error(
         A ``CallToolResult`` with ``is_error=True`` and the same
         markdown-formatted error prose this helper has always produced.
     """
+    all_hints = list(hints) if hints else []
+    if is_transient(exc):
+        all_hints.insert(0, _TRANSIENT_HINT)
     lines = [f"**Error**: {exc}"]
     if context:
         lines.append(f"\n{context}")
-    if hints:
+    if all_hints:
         lines.append("\n**Try:**")
-        lines.extend(f"- {h}" for h in hints)
+        lines.extend(f"- {h}" for h in all_hints)
     text = "\n".join(lines)
     return CallToolResult(content=[TextContent(type="text", text=text)], is_error=True)
 
@@ -182,6 +236,8 @@ async def run_ami_command(
     command: str,
     *,
     format: str = "dom_object",  # pylint: disable=redefined-builtin
+    attempts: int = _DEFAULT_ATTEMPTS,
+    retry_delay: float = _DEFAULT_RETRY_DELAY_S,
 ) -> Any:
     """Execute an AMI command with a client scoped to this one call.
 
@@ -190,17 +246,44 @@ async def run_ami_command(
     per-user credential backing it, in broker mode) before returning. Tools
     stay agnostic of how the client is provisioned.
 
+    Transient pyAMI connection errors (see ``is_transient``) are retried up
+    to *attempts* times total, invisibly to the caller. This is only safe
+    because every ami-mcp tool issues read-only AMI queries -- retrying is
+    idempotent. Each attempt re-acquires the client from the factory rather
+    than reusing one across attempts: in broker mode, ``get_client()`` redeems
+    a fresh per-user VOMS proxy and disposes of it on exit, so a retry that
+    reused an already-released client would fail on a dead credential.
+
     Args:
         ctx: The MCP request Context.
         command: AMI command string.
         format: pyAMI result format (default "dom_object").
+        attempts: Total number of attempts before giving up (default 2).
+        retry_delay: Seconds to sleep between attempts (default 0.5).
 
     Returns:
         The pyAMI result object (e.g. DOMObject — call .get_rows() on it).
     """
     factory = ctx.request_context.lifespan_context["client_factory"]
-    async with factory.get_client(ctx) as client:
-        return await run_ami_sync(client.execute, command, format=format)
+
+    async def _attempt() -> Any:
+        async with factory.get_client(ctx) as client:
+            return await run_ami_sync(client.execute, command, format=format)
+
+    for attempt in range(1, attempts):
+        try:
+            return await _attempt()
+        except Exception as exc:  # noqa: PERF203 -- at most one retry by default
+            if not is_transient(exc):
+                raise
+            _log.warning(
+                "Transient AMI error on attempt %d/%d, retrying: %s",
+                attempt,
+                attempts,
+                exc,
+            )
+            await asyncio.sleep(retry_delay)
+    return await _attempt()  # final attempt: its exception propagates unwrapped
 
 
 # Maps scope strings (e.g. "mc20_13TeV") to their AMI catalog names, per

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+from contextlib import asynccontextmanager
+from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 from mcp.types import CallToolResult
@@ -11,7 +14,9 @@ from ami_mcp.tools._helpers import (
     data_type_to_prod_step,
     format_ami_result,
     format_error,
+    is_transient,
     rows_to_dicts,
+    run_ami_command,
     scope_to_catalog,
 )
 
@@ -101,6 +106,19 @@ class TestFormatError:
         result = format_error(ValueError("bad"), hints=["Try again."])
         assert "Try again." in result.content[0].text  # type: ignore[union-attr]
 
+    def test_transient_error_gets_a_retry_hint_ahead_of_callers_hints(self) -> None:
+        result = format_error(
+            Exception("pyAMI exception: Closed Connection"),
+            hints=["Verify the LDN is complete."],
+        )
+        text = result.content[0].text  # type: ignore[union-attr]
+        assert "transient" in text.lower()
+        assert text.index("transient") < text.index("Verify the LDN is complete.")
+
+    def test_non_transient_error_gets_no_retry_hint(self) -> None:
+        result = format_error(ValueError("bad"), hints=["Try again."])
+        assert "transient" not in result.content[0].text.lower()  # type: ignore[union-attr]
+
 
 class TestRowsToDicts:
     def test_ordered_dict_rows_pass_through_as_plain_dicts(self) -> None:
@@ -162,3 +180,130 @@ class TestScopeToCatalog:
 
     def test_unknown_project_falls_back_regardless_of_prod_step(self) -> None:
         assert scope_to_catalog("data22_13p6TeV", "evgen") == "data22_001:production"
+
+
+class TestIsTransient:
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "pyAMI exception: No more data to read from socket",
+            "pyAMI exception: Closed Connection",
+            "Connection reset by peer",
+            "Broken pipe",
+            "EOF occurred in violation of protocol",
+            "could not connect to `https://atlas-ami.cern.ch:443...`: timed out",
+            "service temporarily unreachable",
+            "Read timed out.",
+        ],
+    )
+    def test_transient_connection_messages(self, message: str) -> None:
+        assert is_transient(Exception(message)) is True
+
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "pyAMI exception: unknown command `Bogus`",
+            "pyAMI exception: invalid format `xml`, not in [dom_object]",
+            "command parsing error, please contact ami@lpsc.in2p3.fr",
+        ],
+    )
+    def test_semantic_ami_errors_are_not_transient(self, message: str) -> None:
+        assert is_transient(Exception(message)) is False
+
+    def test_matching_is_case_insensitive(self) -> None:
+        assert is_transient(Exception("CLOSED CONNECTION")) is True
+
+
+class _FakeClient:
+    """A pyAMI-client stand-in whose ``execute`` fails a fixed number of times."""
+
+    def __init__(self, failures: list[Exception], result: Any = "ok") -> None:
+        self._failures = list(failures)
+        self._result = result
+        self.execute_calls = 0
+
+    def execute(self, command: str, format: str = "dom_object") -> Any:  # noqa: ARG002
+        self.execute_calls += 1
+        if self._failures:
+            raise self._failures.pop(0)
+        return self._result
+
+
+class _FakeFactory:
+    """A client factory spy that counts how many times a client was acquired."""
+
+    def __init__(self, client: _FakeClient) -> None:
+        self._client = client
+        self.get_client_calls = 0
+
+    def get_client(self, ctx: Any) -> Any:  # noqa: ARG002
+        self.get_client_calls += 1
+        return self._scoped()
+
+    @asynccontextmanager
+    async def _scoped(self) -> Any:
+        yield self._client
+
+
+def _make_ctx(factory: _FakeFactory) -> MagicMock:
+    ctx = MagicMock()
+    ctx.request_context.lifespan_context = {"client_factory": factory}
+    return ctx
+
+
+class TestRunAmiCommandRetry:
+    async def test_succeeds_on_first_attempt_without_retry(self) -> None:
+        client = _FakeClient(failures=[], result="ok")
+        factory = _FakeFactory(client)
+        result = await run_ami_command(_make_ctx(factory), "SearchQuery -x=1")
+        assert result == "ok"
+        assert factory.get_client_calls == 1
+        assert client.execute_calls == 1
+
+    async def test_retries_once_on_transient_error_then_succeeds(self) -> None:
+        client = _FakeClient(
+            failures=[Exception("pyAMI exception: No more data to read from socket")],
+            result="ok",
+        )
+        factory = _FakeFactory(client)
+        result = await run_ami_command(
+            _make_ctx(factory), "SearchQuery -x=1", retry_delay=0
+        )
+        assert result == "ok"
+        # A fresh client is re-acquired per attempt (broker mode redeems a
+        # fresh proxy per get_client() call).
+        assert factory.get_client_calls == 2
+        assert client.execute_calls == 2
+
+    async def test_non_transient_error_raises_immediately(self) -> None:
+        client = _FakeClient(
+            failures=[Exception("pyAMI exception: unknown command `Bogus`")],
+        )
+        factory = _FakeFactory(client)
+        with pytest.raises(Exception, match="unknown command"):
+            await run_ami_command(_make_ctx(factory), "Bogus", retry_delay=0)
+        assert factory.get_client_calls == 1
+
+    async def test_transient_error_on_every_attempt_raises_original(self) -> None:
+        client = _FakeClient(
+            failures=[
+                Exception("Closed Connection"),
+                Exception("Closed Connection"),
+            ],
+        )
+        factory = _FakeFactory(client)
+        with pytest.raises(Exception, match="Closed Connection"):
+            await run_ami_command(_make_ctx(factory), "SearchQuery -x=1", retry_delay=0)
+        assert factory.get_client_calls == 2
+        assert client.execute_calls == 2
+
+    async def test_attempts_one_disables_retry(self) -> None:
+        client = _FakeClient(
+            failures=[Exception("Closed Connection")],
+        )
+        factory = _FakeFactory(client)
+        with pytest.raises(Exception, match="Closed Connection"):
+            await run_ami_command(
+                _make_ctx(factory), "SearchQuery -x=1", attempts=1, retry_delay=0
+            )
+        assert factory.get_client_calls == 1
