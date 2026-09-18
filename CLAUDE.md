@@ -280,9 +280,16 @@ SearchQuery -catalog=mc23_001:production -entity=HASHTAGS
 `-entity` values. Quoting them causes parse errors when the MQL contains `%`
 wildcards. Only `-mql` needs quoting. Use `LIMIT 0,N` syntax (not `LIMIT N`).
 
-Catalog names depend on scope:
+Catalog names depend on both scope and production step (evgen vs. sim vs.
+reco/derivation) — see `scope_to_catalog()` / `data_type_to_prod_step()` in
+`tools/_helpers.py`. mc16 and mc20 evgen datasets live in the mc15 catalog
+(mc15-era job options); mc20 sim datasets live in the mc16 catalog; mc20
+reco/derivation datasets live in the mc20 catalog. mc16/mc21/mc23 otherwise keep
+one catalog per campaign:
 
-- `mc16_13TeV`, `mc20_13TeV` → `mc15_001:production`
+- `mc16_13TeV`, `mc20_13TeV` EVNT/HEPMC → `mc15_001:production`
+- `mc20_13TeV` HITS → `mc16_001:production`
+- `mc20_13TeV` everything else (default) → `mc20_001:production`
 - `mc23_13p6TeV` → `mc23_001:production`
 
 ## ATLAS dataset nomenclature
