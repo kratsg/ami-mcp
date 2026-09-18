@@ -26,6 +26,7 @@ src/ami_mcp/
 ├── cli.py               # argparse: `ami-mcp serve`
 ├── server.py            # FastMCP setup, lifespan (pyAMI client init), tool registration
 ├── nomenclature.py      # ATLAS naming + hashtag + campaign constants (used by resources.py)
+├── policy.py            # ami_execute command-verb allowlist (DEFAULT_ALLOWED_COMMANDS, etc.)
 ├── resources.py         # MCP resources: AMI query language ref, nomenclature, commands
 └── tools/
     ├── __init__.py
@@ -43,6 +44,7 @@ tests/
 ├── test_cli.py
 ├── test_server.py
 ├── test_resources.py
+├── test_policy.py
 ├── test_tools_execute.py
 ├── test_tools_datasets.py
 ├── test_tools_hashtags.py
@@ -284,6 +286,27 @@ Catalog names depend on scope:
 
 - `mc16_13TeV`, `mc20_13TeV` → `mc15_001:production`
 - `mc23_13p6TeV` → `mc23_001:production`
+
+## `ami_execute` command allowlist
+
+`ami_execute` only accepts commands whose leading verb is in
+`ami_mcp.policy.DEFAULT_ALLOWED_COMMANDS` (the 7 verbs documented above),
+extend-only per deployment via `--allow-command` / `AMI_MCP_ALLOW_COMMANDS` (see
+`docs/configuration.md`). Two decisions here that a future change shouldn't
+re-litigate without discussion:
+
+- **Where the policy lives**: pure verb/config logic (`command_verb()`,
+  `parse_allowed_commands()`, `DEFAULT_ALLOWED_COMMANDS`, ...) is in
+  `policy.py`, a dependency-free top-level module alongside `nomenclature.py`.
+  The one function that renders a rejection as a `CallToolResult`
+  (`check_command_allowed()`) lives in `tools/_helpers.py` next to
+  `format_error()`, which it wraps.
+- **Enforcement is `ami_execute`-only**, not centralized in `run_ami_command`.
+  The other 10 tools build their own fixed command strings from a handful of
+  hardcoded verbs and must never be blockable by a misconfigured deployment
+  allowlist. `tests/test_policy.py`'s `TestDefaultSetCoversBuiltinTools` is a
+  drift guard: it fails if a tool starts issuing a verb not already in
+  `DEFAULT_ALLOWED_COMMANDS`, so add the verb there when that happens.
 
 ## ATLAS dataset nomenclature
 

@@ -9,6 +9,7 @@ from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import BaseModel
 
 from ami_mcp.tools._helpers import (
+    check_command_allowed,
     format_ami_result,
     format_error,
     rows_to_dicts,
@@ -59,9 +60,17 @@ def register(mcp: MCPServer) -> None:
 
           GetPhysicsParamsForDataset -logicalDatasetName="..."
 
+        Only allowlisted command verbs are accepted. The built-in set is
+        SearchQuery, AMIGetDatasetInfo, AMIGetDatasetProv, AMIGetAMITagInfo,
+        GetPhysicsParamsForDataset, DatasetWBListHashtags and
+        DatasetWBListDatasetsForHashtag; a deployment may permit more. A
+        rejection lists the verbs this server actually permits.
+
         Args:
             command: AMI command string (see ami://query-language resource).
         """
+        if err := check_command_allowed(ctx.request_context.lifespan_context, command):
+            return err
         try:
             result = await run_ami_command(ctx, command)
             rows = result.get_rows()

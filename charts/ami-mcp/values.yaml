@@ -43,6 +43,12 @@ server:
   # derived as https://<ingress.host> when the ingress is enabled, else the
   # server falls back to http://<host>:<port>.
   resourceUrl: ""
+  # Extra AMI command verbs ami_execute may run, on top of the built-in
+  # read-only set (SearchQuery, AMIGetDatasetInfo, AMIGetDatasetProv,
+  # AMIGetAMITagInfo, GetPhysicsParamsForDataset, DatasetWBListHashtags,
+  # DatasetWBListDatasetsForHashtag). Extend-only: listing fewer verbs here
+  # cannot narrow the defaults. Each entry renders one --allow-command flag.
+  allowCommands: []
 
 ami:
   # AMI server endpoint (AMI_ENDPOINT). atlas-replica is the read-only replica

@@ -6,12 +6,13 @@ icon: lucide/settings
 
 ## Environment variables
 
-| Variable             | Required    | Description                                                                                                                                                             |
-| -------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `X509_USER_PROXY`    | Recommended | Path to your VOMS proxy certificate (auto-detected from `/tmp/x509up_u<uid>`)                                                                                           |
-| `X509_CERT_DIR`      | Recommended | Directory of CA certificates for SSL verification. **Set automatically** when installed via pixi/conda-forge (`ca-policy-lcg` package). Must be set manually otherwise. |
-| `AMI_ENDPOINT`       | No          | AMI server endpoint (default: `atlas-replica`)                                                                                                                          |
-| `ATLAS_PMGXSEC_PATH` | No          | Path to PMGxsecDB text files (default: CVMFS PMGTools directory)                                                                                                        |
+| Variable                 | Required    | Description                                                                                                                                                                 |
+| ------------------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `X509_USER_PROXY`        | Recommended | Path to your VOMS proxy certificate (auto-detected from `/tmp/x509up_u<uid>`)                                                                                               |
+| `X509_CERT_DIR`          | Recommended | Directory of CA certificates for SSL verification. **Set automatically** when installed via pixi/conda-forge (`ca-policy-lcg` package). Must be set manually otherwise.     |
+| `AMI_ENDPOINT`           | No          | AMI server endpoint (default: `atlas-replica`)                                                                                                                              |
+| `ATLAS_PMGXSEC_PATH`     | No          | Path to PMGxsecDB text files (default: CVMFS PMGTools directory)                                                                                                            |
+| `AMI_MCP_ALLOW_COMMANDS` | No          | Comma-separated extra AMI command verbs `ami_execute` may run, on top of the built-in read-only set (see [`ami_execute` command allowlist](#ami_execute-command-allowlist)) |
 
 ## Authentication
 
@@ -85,12 +86,55 @@ conda-forge, because `ca-policy-lcg` sets `X509_CERT_DIR` automatically.
 
 ## AMI endpoint
 
-The default endpoint `atlas-replica` is a read-only replica of the main AMI
-server. For write operations (not currently exposed), set `AMI_ENDPOINT=atlas`.
+The default endpoint is `atlas-replica`. Despite the name, `atlas-replica` and
+`atlas` resolve to the identical AMI host, port, and path — the endpoint choice
+provides no write protection on its own; it is a naming convention, not a
+read-only guarantee. What actually keeps `ami-mcp` read-only is that every tool
+it exposes issues read-oriented AMI commands, and (as of the allowlist below)
+`ami_execute` only accepts a fixed set of read-oriented command verbs.
 
 ```bash
-export AMI_ENDPOINT=atlas-replica   # default, recommended for queries
+export AMI_ENDPOINT=atlas-replica   # default
 ```
+
+## `ami_execute` command allowlist
+
+`ami_execute` is the escape hatch for AMI queries no specialized tool covers,
+but it forwards the LLM-formulated command string to AMI's interpreter verbatim.
+To bound that, `ami_execute` only accepts commands whose leading verb is
+allowlisted. The built-in set is exactly the seven commands documented in the
+`ami://query-language` resource:
+
+- `SearchQuery`
+- `AMIGetDatasetInfo`
+- `AMIGetDatasetProv`
+- `AMIGetAMITagInfo`
+- `GetPhysicsParamsForDataset`
+- `DatasetWBListHashtags`
+- `DatasetWBListDatasetsForHashtag`
+
+Extend the set per deployment with `--allow-command VERB` (repeatable, or
+comma-separated in one occurrence) or the `AMI_MCP_ALLOW_COMMANDS` env var
+(comma-separated). The flag replaces the env var rather than adding to it. The
+allowlist is **extend-only** — the seven built-in verbs can never be removed.
+
+```bash
+ami-mcp serve --allow-command GetElementInfo --allow-command SomeOtherVerb
+# or
+export AMI_MCP_ALLOW_COMMANDS=GetElementInfo,SomeOtherVerb
+```
+
+A rejected command returns an error result naming the verb that was rejected and
+the verbs the server actually permits, so the caller (or the LLM) can
+self-correct.
+
+**What this does and doesn't protect against.** The allowlist bounds _which
+verbs_ are reachable through `ami_execute`, not _what each verb is asked to do_.
+`SearchQuery` accepts a `-sql=` parameter (raw SQL) alongside `-mql=`, so an
+allowlisted `SearchQuery` can still carry arbitrary SQL to AMI. AMI's own
+server-side role permissions on the caller's proxy remain the authority on what
+that SQL may do — this is not query sanitization, and a deployment that needs
+finer-grained control should restrict the underlying AMI role instead.
 
 ## Cross-section database path
 

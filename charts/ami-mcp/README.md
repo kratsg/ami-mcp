@@ -54,6 +54,7 @@ helm install ami-mcp ./charts/ami-mcp \
 | `server.host`                               | `0.0.0.0`                 | Bind address (`--host`)                                                |
 | `server.port`                               | `8000`                    | MCP HTTP port, also serves `/healthz` (`--port`)                       |
 | `server.resourceUrl`                        | `""`                      | Public URL (`--resource-url`); derived from `ingress.host` if empty    |
+| `server.allowCommands`                      | `[]`                      | Extra `ami_execute` command verbs (`--allow-command`); extend-only     |
 | `ami.endpoint`                              | `atlas-replica`           | AMI server endpoint (`AMI_ENDPOINT`)                                   |
 | `ami.pmgXsecPath`                           | `""`                      | `ATLAS_PMGXSEC_PATH`; empty = server default (CVMFS PMGTools dir)      |
 | `extraVolumes`                              | `[]`                      | Extra `corev1.Volume`s rendered verbatim into the pod spec             |
@@ -112,6 +113,25 @@ extraVolumeMounts:
 
 Without a CVMFS mount the xsec tools report the path as unavailable; all AMI
 query tools still work.
+
+## Restricting `ami_execute`
+
+`ami_execute` only accepts commands whose leading verb is allowlisted. The
+built-in set is the seven verbs documented in the `ami://query-language`
+resource (`SearchQuery`, `AMIGetDatasetInfo`, `AMIGetDatasetProv`,
+`AMIGetAMITagInfo`, `GetPhysicsParamsForDataset`, `DatasetWBListHashtags`,
+`DatasetWBListDatasetsForHashtag`). Extend it, extend-only, via
+`server.allowCommands`:
+
+```yaml
+server:
+  allowCommands:
+    - GetElementInfo
+```
+
+This bounds _which verbs_ `ami_execute` can reach, not _what each verb is asked
+to do_ — `SearchQuery` accepts a `-sql=` parameter (raw SQL) alongside `-mql=`,
+so it is not a substitute for AMI's own server-side role permissions.
 
 ## Freezing the deployed version
 

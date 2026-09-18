@@ -66,6 +66,7 @@ class TestCLIServe:
             "audience": "ami",
             "forwarded_allow_ips": "127.0.0.1",
             "log_level": "info",
+            "allow_commands": None,
         }
 
     def test_serve_broker_flags_are_forwarded(self) -> None:
@@ -93,6 +94,60 @@ class TestCLIServe:
         assert captured["kwargs"]["auth"] == "broker"
         assert captured["kwargs"]["broker_url"] == "https://mcp.af.uchicago.edu"
         assert captured["kwargs"]["audience"] == "ami"
+
+    def test_allow_command_is_repeatable(self) -> None:
+        captured: dict[str, Any] = {}
+
+        def fake_serve(**kwargs: Any) -> None:
+            captured["kwargs"] = kwargs
+
+        argv = [
+            "ami-mcp",
+            "serve",
+            "--allow-command",
+            "A",
+            "--allow-command",
+            "B",
+        ]
+        with (
+            patch("sys.argv", argv),
+            patch("ami_mcp.cli.serve", fake_serve),
+        ):
+            main()
+
+        assert captured["kwargs"]["allow_commands"] == ["A", "B"]
+
+    def test_allow_commands_env_var_is_forwarded(self, monkeypatch: Any) -> None:
+        monkeypatch.setenv("AMI_MCP_ALLOW_COMMANDS", "A,B")
+        captured: dict[str, Any] = {}
+
+        def fake_serve(**kwargs: Any) -> None:
+            captured["kwargs"] = kwargs
+
+        with (
+            patch("sys.argv", ["ami-mcp", "serve"]),
+            patch("ami_mcp.cli.serve", fake_serve),
+        ):
+            main()
+
+        # Raw passthrough; splitting "A,B" is parse_allowed_commands' job.
+        assert captured["kwargs"]["allow_commands"] == ["A,B"]
+
+    def test_allow_command_flag_overrides_env(self, monkeypatch: Any) -> None:
+        monkeypatch.setenv("AMI_MCP_ALLOW_COMMANDS", "FromEnv")
+        captured: dict[str, Any] = {}
+
+        def fake_serve(**kwargs: Any) -> None:
+            captured["kwargs"] = kwargs
+
+        argv = ["ami-mcp", "serve", "--allow-command", "FromFlag"]
+        with (
+            patch("sys.argv", argv),
+            patch("ami_mcp.cli.serve", fake_serve),
+        ):
+            main()
+
+        assert captured["kwargs"]["allow_commands"] == ["FromFlag"]
 
     def test_no_command_does_not_call_serve(self) -> None:
         captured: dict[str, bool] = {}
