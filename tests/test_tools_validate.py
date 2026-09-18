@@ -19,7 +19,9 @@ if TYPE_CHECKING:
 
 _LDN = "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351"
 
-_MC16_HEADER = "dataset_number/I:physics_short/C:crossSection_pb/D:genFiltEff/D:kFactor/D"
+_MC16_HEADER = (
+    "dataset_number/I:physics_short/C:crossSection_pb/D:genFiltEff/D:kFactor/D"
+)
 _MC16_MATCH_ROW = "700320\t\tSh_2211_Zee\t\t1234.5\t\t0.5\t\t1.1"
 _MC16_MISMATCH_ROW = "700320\t\tSh_2211_Zee\t\t9999.0\t\t0.5\t\t1.1"
 
@@ -40,12 +42,16 @@ def registered_tool() -> Any:
     mcp = MCPServer("test")
     register(mcp)
     return next(
-        tool for tool in mcp._tool_manager.list_tools() if tool.name == "ami_validate_sample"
+        tool
+        for tool in mcp._tool_manager.list_tools()
+        if tool.name == "ami_validate_sample"
     )
 
 
 @pytest.fixture
-def registered_tools(registered_tool: Any) -> dict[str, Callable[..., Awaitable[CallToolResult]]]:
+def registered_tools(
+    registered_tool: Any,
+) -> dict[str, Callable[..., Awaitable[CallToolResult]]]:
     return {"ami_validate_sample": registered_tool.fn}
 
 
@@ -175,7 +181,8 @@ class TestAmiValidateSample:
     ) -> None:
         async def fake_run(_ctx: Any, command: str) -> MagicMock:
             if "DatasetWBListHashtags" in command:
-                raise RuntimeError("AMI down")
+                msg = "AMI down"
+                raise RuntimeError(msg)
             return _make_result_mock([])
 
         with patch("ami_mcp.tools.validate.run_ami_command", new=fake_run):
