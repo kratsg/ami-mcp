@@ -14,12 +14,44 @@ from ami_mcp.tools.datasets import register
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from mcp.types import CallToolResult
+
 
 @pytest.fixture
-def registered_tools() -> dict[str, Callable[..., Awaitable[str]]]:
+def registered_tool_objs() -> dict[str, Any]:
     mcp = MCPServer("test")
     register(mcp)
-    return {tool.name: tool.fn for tool in mcp._tool_manager.list_tools()}
+    return {tool.name: tool for tool in mcp._tool_manager.list_tools()}
+
+
+@pytest.fixture
+def registered_tools(
+    registered_tool_objs: dict[str, Any],
+) -> dict[str, Callable[..., Awaitable[CallToolResult]]]:
+    return {name: tool.fn for name, tool in registered_tool_objs.items()}
+
+
+class TestDatasetsToolRegistration:
+    @pytest.mark.parametrize(
+        "name",
+        ["ami_get_dataset_info", "ami_get_dataset_prov", "ami_list_datasets"],
+    )
+    def test_declares_read_only_annotations(
+        self, registered_tool_objs: dict[str, Any], name: str
+    ) -> None:
+        tool = registered_tool_objs[name]
+        assert tool.annotations is not None
+        assert tool.annotations.read_only_hint is True
+        assert tool.annotations.open_world_hint is True
+
+    @pytest.mark.parametrize(
+        "name",
+        ["ami_get_dataset_info", "ami_get_dataset_prov", "ami_list_datasets"],
+    )
+    def test_publishes_an_output_schema(
+        self, registered_tool_objs: dict[str, Any], name: str
+    ) -> None:
+        assert registered_tool_objs[name].output_schema is not None
 
 
 def _make_result_mock(
@@ -56,8 +88,9 @@ _DATASET_ROWS = [
 class TestAmiGetDatasetInfo:
     async def test_returns_dataset_fields(
         self,
-        registered_tools: dict[str, Callable[..., Awaitable[str]]],
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
         mock_ctx: MagicMock,
+        tool_text: Callable[[CallToolResult], str],
     ) -> None:
         result_mock = _make_result_mock(_DATASET_ROWS)
         with patch(
@@ -69,13 +102,38 @@ class TestAmiGetDatasetInfo:
                 dataset="mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351", ctx=mock_ctx
             )
 
-        assert "VALID" in result
-        assert "10000" in result
+        output = tool_text(result)
+        assert "VALID" in output
+        assert "10000" in output
+        assert result.is_error is not True
+        assert result.structured_content is not None
+        assert result.structured_content["found"] is True
+        assert result.structured_content["fields"]["amiStatus"] == "VALID"
+
+    async def test_no_results(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+        tool_text: Callable[[CallToolResult], str],
+    ) -> None:
+        result_mock = _make_result_mock([])
+        with patch(
+            "ami_mcp.tools.datasets.run_ami_command",
+            new=AsyncMock(return_value=result_mock),
+        ):
+            fn = registered_tools["ami_get_dataset_info"]
+            result = await fn(dataset="missing.dataset", ctx=mock_ctx)
+
+        assert "No results." in tool_text(result)
+        assert result.structured_content is not None
+        assert result.structured_content["found"] is False
+        assert result.structured_content["fields"] == {}
 
     async def test_returns_error_on_exception(
         self,
-        registered_tools: dict[str, Callable[..., Awaitable[str]]],
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
         mock_ctx: MagicMock,
+        tool_text: Callable[[CallToolResult], str],
     ) -> None:
         with patch(
             "ami_mcp.tools.datasets.run_ami_command",
@@ -84,14 +142,17 @@ class TestAmiGetDatasetInfo:
             fn = registered_tools["ami_get_dataset_info"]
             result = await fn(dataset="bad.dataset", ctx=mock_ctx)
 
-        assert "Error" in result
+        assert "Error" in tool_text(result)
+        assert result.is_error is True
+        assert result.structured_content is None
 
 
 class TestAmiGetDatasetProv:
     async def test_returns_provenance(
         self,
-        registered_tools: dict[str, Callable[..., Awaitable[str]]],
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
         mock_ctx: MagicMock,
+        tool_text: Callable[[CallToolResult], str],
     ) -> None:
         nodes = [
             OrderedDict(
@@ -124,13 +185,19 @@ class TestAmiGetDatasetProv:
                 dataset="mc20_13TeV.700320.Sh.deriv.DAOD_PHYS.e8351_p5855", ctx=mock_ctx
             )
 
-        assert "Nodes" in result
-        assert "parent.EVNT" in result
+        output = tool_text(result)
+        assert "Nodes" in output
+        assert "parent.EVNT" in output
+        assert result.structured_content is not None
+        assert result.structured_content["found"] is True
+        assert len(result.structured_content["nodes"]) == 2
+        assert len(result.structured_content["edges"]) == 1
 
     async def test_no_provenance_message(
         self,
-        registered_tools: dict[str, Callable[..., Awaitable[str]]],
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
         mock_ctx: MagicMock,
+        tool_text: Callable[[CallToolResult], str],
     ) -> None:
         result_mock = _make_result_mock([], node_rows=[], edge_rows=[])
         with patch(
@@ -140,9 +207,11 @@ class TestAmiGetDatasetProv:
             fn = registered_tools["ami_get_dataset_prov"]
             result = await fn(dataset="some.dataset", ctx=mock_ctx)
 
-        assert "No provenance" in result
+        assert "No provenance" in tool_text(result)
+        assert result.structured_content is not None
+        assert result.structured_content["found"] is False
 
-    async def test_basic_chain(self, registered_tools, mock_ctx):
+    async def test_basic_chain(self, registered_tools, mock_ctx, tool_text):
         nodes = [
             OrderedDict(
                 [
@@ -182,19 +251,21 @@ class TestAmiGetDatasetProv:
             fn = registered_tools["ami_get_dataset_prov"]
             result = await fn(dataset="some.dataset", ctx=mock_ctx)
 
-        assert "## Lineage Summary" in result
-        assert "EVNT → HITS → AOD" in result
-        assert "## Nodes" in result
-        assert "parent.EVNT" in result
-        assert "child.HITS" in result
-        assert "grandchild.AOD" in result
-        assert "## Edges" in result
+        output = tool_text(result)
+        assert "## Lineage Summary" in output
+        assert "EVNT → HITS → AOD" in output
+        assert "## Nodes" in output
+        assert "parent.EVNT" in output
+        assert "child.HITS" in output
+        assert "grandchild.AOD" in output
+        assert "## Edges" in output
         # check table formatting
-        assert "| source | destination |" in result
-        assert "parent.EVNT" in result
-        assert "child.HITS" in result
+        assert "| source | destination |" in output
+        assert "parent.EVNT" in output
+        assert "child.HITS" in output
+        assert result.structured_content["summary"] == "EVNT → HITS → AOD"
 
-    async def test_data_types_filter_exact(self, registered_tools, mock_ctx):
+    async def test_data_types_filter_exact(self, registered_tools, mock_ctx, tool_text):
         nodes = [
             OrderedDict(
                 [
@@ -223,11 +294,14 @@ class TestAmiGetDatasetProv:
             fn = registered_tools["ami_get_dataset_prov"]
             result = await fn(dataset="ds", data_types="EVNT", ctx=mock_ctx)
 
-        assert "HITS" not in result
-        assert "EVNT" in result
-        assert "No nodes remain after filtering" not in result
+        output = tool_text(result)
+        assert "HITS" not in output
+        assert "EVNT" in output
+        assert "No nodes remain after filtering" not in output
 
-    async def test_data_types_filter_prefix(self, registered_tools, mock_ctx):
+    async def test_data_types_filter_prefix(
+        self, registered_tools, mock_ctx, tool_text
+    ):
         nodes = [
             OrderedDict(
                 [
@@ -267,12 +341,13 @@ class TestAmiGetDatasetProv:
             fn = registered_tools["ami_get_dataset_prov"]
             result = await fn(dataset="ds", data_types="DAOD_", ctx=mock_ctx)
 
+        output = tool_text(result)
         # Only DAOD_PHYS and DAOD_FTAG1 should appear
-        assert "DAOD_PHYS" in result
-        assert "DAOD_FTAG1" in result
-        assert ".AOD" not in result
+        assert "DAOD_PHYS" in output
+        assert "DAOD_FTAG1" in output
+        assert ".AOD" not in output
 
-    async def test_no_nodes_found(self, registered_tools, mock_ctx):
+    async def test_no_nodes_found(self, registered_tools, mock_ctx, tool_text):
         result_mock = _make_result_mock([])
         with patch(
             "ami_mcp.tools.datasets.run_ami_command",
@@ -280,9 +355,11 @@ class TestAmiGetDatasetProv:
         ):
             fn = registered_tools["ami_get_dataset_prov"]
             result = await fn(dataset="ds", ctx=mock_ctx)
-        assert "No provenance found." in result
+        assert "No provenance found." in tool_text(result)
 
-    async def test_edge_pruning_after_filter(self, registered_tools, mock_ctx):
+    async def test_edge_pruning_after_filter(
+        self, registered_tools, mock_ctx, tool_text
+    ):
         nodes = [
             OrderedDict(
                 [
@@ -310,11 +387,15 @@ class TestAmiGetDatasetProv:
             fn = registered_tools["ami_get_dataset_prov"]
             result = await fn(dataset="ds", data_types="EVNT", ctx=mock_ctx)
 
+        output = tool_text(result)
         # Edge between EVNT → HITS should be removed after filtering
-        assert "HITS" not in result
-        assert "## Edges" not in result
+        assert "HITS" not in output
+        assert "## Edges" not in output
+        assert result.structured_content["edges"] == []
 
-    async def test_multiple_nodes_same_distance(self, registered_tools, mock_ctx):
+    async def test_multiple_nodes_same_distance(
+        self, registered_tools, mock_ctx, tool_text
+    ):
         nodes = [
             OrderedDict(
                 [
@@ -350,16 +431,18 @@ class TestAmiGetDatasetProv:
             fn = registered_tools["ami_get_dataset_prov"]
             result = await fn(dataset="ds", ctx=mock_ctx)
 
+        output = tool_text(result)
         # Should show same-distance nodes in parentheses and sorted alphanumerically
-        assert "(HEPMC, HITS)" in result or "(HITS, HEPMC)" in result
-        assert "## Nodes" in result
+        assert "(HEPMC, HITS)" in output or "(HITS, HEPMC)" in output
+        assert "## Nodes" in output
 
 
 class TestAmiGetDatasetInfoContextualHints:
     async def test_trashed_dataset_hint(
         self,
-        registered_tools: dict[str, Callable[..., Awaitable[str]]],
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
         mock_ctx: MagicMock,
+        tool_text: Callable[[CallToolResult], str],
     ) -> None:
         rows = [
             OrderedDict(
@@ -380,13 +463,15 @@ class TestAmiGetDatasetInfoContextualHints:
                 dataset="mc20_13TeV.700320.Sh.evgen.EVNT.e8351", ctx=mock_ctx
             )
 
-        assert "TRASHED" in result
-        assert "newer version" in result
+        output = tool_text(result)
+        assert "TRASHED" in output
+        assert "newer version" in output
 
     async def test_nfiles_zero_hint(
         self,
-        registered_tools: dict[str, Callable[..., Awaitable[str]]],
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
         mock_ctx: MagicMock,
+        tool_text: Callable[[CallToolResult], str],
     ) -> None:
         rows = [
             OrderedDict(
@@ -407,13 +492,13 @@ class TestAmiGetDatasetInfoContextualHints:
                 dataset="mc20_13TeV.700320.Sh.evgen.EVNT.e8351", ctx=mock_ctx
             )
 
-        assert "nFiles=0" in result
+        assert "nFiles=0" in tool_text(result)
 
 
 class TestAmiListDatasets:
     async def test_builds_correct_command_with_wildcards(
         self,
-        registered_tools: dict[str, Callable[..., Awaitable[str]]],
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
         mock_ctx: MagicMock,
     ) -> None:
         """Command must not double-quote catalog/entity and must use LIMIT 0,N syntax."""
@@ -440,8 +525,9 @@ class TestAmiListDatasets:
 
     async def test_returns_error_with_hints(
         self,
-        registered_tools: dict[str, Callable[..., Awaitable[str]]],
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
         mock_ctx: MagicMock,
+        tool_text: Callable[[CallToolResult], str],
     ) -> None:
         with patch(
             "ami_mcp.tools.datasets.run_ami_command",
@@ -450,5 +536,7 @@ class TestAmiListDatasets:
             fn = registered_tools["ami_list_datasets"]
             result = await fn(patterns="%Zee%", project="mc23_13p6TeV", ctx=mock_ctx)
 
-        assert "**Error**:" in result
-        assert "wildcard" in result.lower() or "%" in result
+        output = tool_text(result)
+        assert "**Error**:" in output
+        assert "wildcard" in output.lower() or "%" in output
+        assert result.is_error is True

@@ -47,7 +47,9 @@ class _FakeProxyClient:
         path = Path(raw_path)
         path.write_text("FAKE PEM")
         self.created_paths.append(path)
-        return ProxyHandle(path=path, dn="/CN=test", expires_at=_utc_soon())
+        return ProxyHandle(
+            path=path, dn="/CN=test", expires_at=_utc_soon(), nickname=None
+        )
 
 
 class _UnavailableProxyClient:

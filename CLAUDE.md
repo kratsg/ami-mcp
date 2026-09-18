@@ -54,29 +54,66 @@ tests/
 
 ## Tool registration pattern
 
-Each tool module exports a `register(mcp: FastMCP) -> None` function.
+Each tool module exports a `register(mcp: MCPServer) -> None` function.
 `server.py` imports the modules and calls `module.register(mcp)` for each. Tools
 are defined as closures inside `register()` using the `@mcp.tool()` decorator.
+
+Every tool returns markdown _and_ structured content:
+`CallToolResult(content=[...], structured_content=...)`, with the return
+annotation spelled `Annotated[CallToolResult, ResultModel]`. This is the escape
+hatch the mcp SDK's `func_metadata()` provides specifically for this case (see
+`mcp/server/mcpserver/utilities/func_metadata.py`): annotating a tool
+`-> ResultModel` directly gets you `outputSchema` + `structuredContent`, but the
+SDK then renders the text block as `pydantic_core.to_json(result, indent=2)`,
+destroying the curated markdown. `Annotated[CallToolResult, ResultModel]`
+publishes `outputSchema` from `ResultModel`, validates `structured_content`
+against it at runtime, and returns the `CallToolResult` — markdown text block
+and all — unchanged.
+
+Because AMI's result rows are `OrderedDict`s with campaign-dependent, dynamic
+keys (there is no fixed AMI dataset/provenance/xsec schema this repo controls),
+result models that carry raw AMI rows use `dict[str, Any]` /
+`list[dict[str, Any]]` fields rather than fully-typed per-column models — the
+`rows_to_dicts()` helper in `_helpers.py` coerces a `DOMObject.get_rows()` list
+into that shape uniformly.
 
 ```python
 # tools/mymodule.py
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from mcp.server.mcpserver import Context, MCPServer
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
+from pydantic import BaseModel
 
 from ami_mcp.tools._helpers import (
     append_next_actions,
     format_ami_result,
     format_error,
+    rows_to_dicts,
     run_ami_command,
 )
 
 
+class AmiMyToolResult(BaseModel):
+    """Structured result of ami_my_tool."""
+
+    param: str
+    rows: list[dict[str, Any]]
+
+
 def register(mcp: MCPServer) -> None:
-    @mcp.tool()
-    async def ami_my_tool(param: str, *, ctx: Context[Any, Any]) -> str:
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            title="My tool",
+            read_only_hint=True,
+            open_world_hint=True,
+        )
+    )
+    async def ami_my_tool(
+        param: str, *, ctx: Context[Any, Any]
+    ) -> Annotated[CallToolResult, AmiMyToolResult]:
         """Tool description — shown to the LLM as the tool's purpose."""
         try:
             result = await run_ami_command(
@@ -84,10 +121,6 @@ def register(mcp: MCPServer) -> None:
                 f'SomeAMICommand -param="{param}"',
             )
             rows = result.get_rows()
-            output = format_ami_result(rows)
-            return append_next_actions(
-                output, ["Use `ami_get_dataset_info` for full metadata."]
-            )
         except Exception as exc:  # noqa: BLE001
             return format_error(
                 exc,
@@ -96,6 +129,14 @@ def register(mcp: MCPServer) -> None:
                     "Use `ami_execute` for raw queries.",
                 ],
             )
+        text = append_next_actions(
+            format_ami_result(rows), ["Use `ami_get_dataset_info` for full metadata."]
+        )
+        payload = AmiMyToolResult(param=param, rows=rows_to_dicts(rows))
+        return CallToolResult(
+            content=[TextContent(type="text", text=text)],
+            structured_content=payload.model_dump(mode="json"),
+        )
 ```
 
 Key conventions:
@@ -103,9 +144,27 @@ Key conventions:
 - Tool names are prefixed with `ami_` to avoid collisions
 - `ctx` is keyword-only (after `*`) so optional parameters can have defaults
   before it
-- Errors are returned via `format_error(exc, hints=[...])` — never raised as
-  exceptions and never as bare `f"Error: {exc}"` strings
-- Use `append_next_actions(output, [...])` to suggest follow-up tool calls
+- `Context`/`MCPServer`/`CallToolResult`/`TextContent`/`ToolAnnotations` and
+  every result model used in a return annotation must be imported as **real,
+  non-`TYPE_CHECKING`** imports — the mcp SDK's `func_metadata()` calls
+  `inspect.signature(func, eval_str=True)`, which needs every name in the
+  signature to actually resolve in the function's module globals at _runtime_,
+  not just for static type checking. Getting this wrong raises
+  `InvalidSignature: Unable to evaluate type annotations` the moment the tool is
+  registered.
+- All 11 tools are read-only AMI/xsec-DB queries against an external service, so
+  every `ToolAnnotations` today is `read_only_hint=True, open_world_hint=True`.
+  `destructive_hint`/`idempotent_hint` stay unset — the spec says they're only
+  meaningful when `read_only_hint` is false.
+- Errors are returned via `format_error(exc, hints=[...])`, which itself returns
+  a `CallToolResult(is_error=True)` — never raised, never a bare
+  `f"Error: {exc}"` string, and never a plain error `CallToolResult` built by
+  hand at a tool's own call site. `format_error(ValueError(...))` also covers
+  non-exception error conditions (e.g. a missing config path) without needing to
+  actually raise/catch.
+- Use `append_next_actions(output, [...])` to suggest follow-up tool calls, on
+  the markdown text going into the `TextContent` block — never on
+  `structured_content`.
 - `except Exception as exc:` lines carry `# noqa: BLE001` inline;
   `broad-exception-caught` is disabled globally in pylint (`pyproject.toml`)
 - All pyAMI calls go through `run_ami_command(ctx, command)` — it obtains a

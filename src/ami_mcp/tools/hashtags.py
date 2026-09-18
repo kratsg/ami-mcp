@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from mcp.server.mcpserver import Context, MCPServer  # noqa: TC002
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
+from pydantic import BaseModel
 
 from ami_mcp.tools._helpers import (
     append_next_actions,
@@ -12,11 +14,46 @@ from ami_mcp.tools._helpers import (
     run_ami_command,
 )
 
+_NO_TAGS = "—"
+
+
+class AmiHashtagDataset(BaseModel):
+    """One dataset matching a hashtag combination search."""
+
+    dsid: str
+    physics_short: str
+    ldn: str
+
+
+class AmiSearchByHashtagsResult(BaseModel):
+    """Structured result of ``ami_search_by_hashtags``."""
+
+    l1: str
+    l2: str | None = None
+    l3: str | None = None
+    l4: str | None = None
+    scope: str
+    datasets: list[AmiHashtagDataset]
+
+
+class AmiDatasetHashtagsResult(BaseModel):
+    """Structured result of ``ami_get_dataset_hashtags``."""
+
+    dataset: str
+    found: bool
+    hashtags: dict[str, list[str]]
+
 
 def register(mcp: MCPServer) -> None:
     """Register hashtag tools."""
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            title="Search datasets by PMG hashtag",
+            read_only_hint=True,
+            open_world_hint=True,
+        )
+    )
     async def ami_search_by_hashtags(
         l1: str,
         l2: str | None = None,
@@ -25,7 +62,7 @@ def register(mcp: MCPServer) -> None:
         scope: str = "mc23_13p6TeV",
         *,
         ctx: Context[Any, Any],
-    ) -> str:
+    ) -> Annotated[CallToolResult, AmiSearchByHashtagsResult]:
         """Find ATLAS MC datasets with a given PMG hashtag combination.
 
         This is the primary way to find MC samples for a physics process.
@@ -76,7 +113,12 @@ def register(mcp: MCPServer) -> None:
             # Filter to the requested campaign scope client-side
             rows = [r for r in rows if r.get("ldn", "").startswith(f"{scope}.")]
             if not rows:
-                return "No results."
+                return CallToolResult(
+                    content=[TextContent(type="text", text="No results.")],
+                    structured_content=AmiSearchByHashtagsResult(
+                        l1=l1, l2=l2, l3=l3, l4=l4, scope=scope, datasets=[]
+                    ).model_dump(mode="json"),
+                )
             ldns = [r["ldn"] for r in rows]
 
             lines = [f"## Matching Datasets ({len(ldns)} found)"]
@@ -85,21 +127,32 @@ def register(mcp: MCPServer) -> None:
             lines.append("| DSID | physicsShort | LDN |")
             lines.append("|------|-------------|-----|")
 
+            datasets: list[AmiHashtagDataset] = []
             for ldn in ldns:
                 parts = ldn.split(".")
                 dsid = parts[1] if len(parts) > 1 else ""
                 physics_short = parts[2] if len(parts) > 2 else ""
                 lines.append(f"| {dsid} | {physics_short} | `{ldn}` |")
+                datasets.append(
+                    AmiHashtagDataset(dsid=dsid, physics_short=physics_short, ldn=ldn)
+                )
 
             output = "\n".join(lines)
 
-            return append_next_actions(
+            text = append_next_actions(
                 output,
                 [
                     "Use `ami_get_dataset_info` on a specific LDN for full metadata.",
                     "Use `ami_get_physics_params` on an EVNT LDN for cross-sections.",
                     "Use `ami_get_dataset_hashtags` on an LDN to confirm its classification.",
                 ],
+            )
+            payload = AmiSearchByHashtagsResult(
+                l1=l1, l2=l2, l3=l3, l4=l4, scope=scope, datasets=datasets
+            )
+            return CallToolResult(
+                content=[TextContent(type="text", text=text)],
+                structured_content=payload.model_dump(mode="json"),
             )
         except Exception as exc:  # noqa: BLE001
             return format_error(
@@ -110,12 +163,18 @@ def register(mcp: MCPServer) -> None:
                 ],
             )
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            title="Get dataset hashtag classification",
+            read_only_hint=True,
+            open_world_hint=True,
+        )
+    )
     async def ami_get_dataset_hashtags(
         dataset: str,
         *,
         ctx: Context[Any, Any],
-    ) -> str:
+    ) -> Annotated[CallToolResult, AmiDatasetHashtagsResult]:
         """Get the PMG hashtag classification for a given ATLAS dataset.
 
         Reverse-looks up the PMGL1-PMGL4 hashtags assigned to a dataset in
@@ -141,14 +200,20 @@ def register(mcp: MCPServer) -> None:
             result = await run_ami_command(ctx, command)
             rows = result.get_rows()
             if not rows:
-                return "*No hashtags found in AMI.*"
+                return CallToolResult(
+                    content=[
+                        TextContent(type="text", text="*No hashtags found in AMI.*")
+                    ],
+                    structured_content=AmiDatasetHashtagsResult(
+                        dataset=dataset, found=False, hashtags={}
+                    ).model_dump(mode="json"),
+                )
             # Group by scope (AMI returns lowercase keys: 'scope', 'name')
             by_scope: dict[str, list[str]] = {}
             for row in rows:
                 scope_val = row.get("scope") or row.get("SCOPE", "?")
                 name_val = row.get("name") or row.get("NAME", "?")
                 by_scope.setdefault(scope_val, []).append(name_val)
-            _none = "\u2014"
             lines = [
                 "## PMG Hashtag Classification",
                 "",
@@ -157,15 +222,22 @@ def register(mcp: MCPServer) -> None:
             ]
             for level in ("PMGL1", "PMGL2", "PMGL3", "PMGL4"):
                 names = by_scope.get(level, [])
-                tag_str = ", ".join(names) if names else _none
+                tag_str = ", ".join(names) if names else _NO_TAGS
                 lines.append(f"| {level} | {tag_str} |")
             output = prefix + "\n".join(lines)
-            return append_next_actions(
+            text = append_next_actions(
                 output,
                 [
                     "Use `ami_search_by_hashtags` with these tags to find similar datasets.",
                     "Use `ami_get_physics_params` on this LDN for cross-section data.",
                 ],
+            )
+            payload = AmiDatasetHashtagsResult(
+                dataset=dataset, found=True, hashtags=by_scope
+            )
+            return CallToolResult(
+                content=[TextContent(type="text", text=text)],
+                structured_content=payload.model_dump(mode="json"),
             )
         except Exception as exc:  # noqa: BLE001
             return format_error(
