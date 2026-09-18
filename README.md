@@ -1,4 +1,4 @@
-# ami-mcp v0.2.5
+# ami-mcp v0.2.4
 
 [![Actions Status][actions-badge]][actions-link]
 [![Documentation Status][rtd-badge]][rtd-link]
