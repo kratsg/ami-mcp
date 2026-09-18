@@ -6,6 +6,8 @@ import asyncio
 from collections import OrderedDict
 from typing import Any
 
+from mcp.types import CallToolResult, TextContent
+
 _VERTICAL_THRESHOLD = 6
 
 
@@ -72,8 +74,12 @@ def format_error(
     exc: Exception,
     context: str = "",
     hints: list[str] | None = None,
-) -> str:
-    """Format an error with optional context and recovery hints.
+) -> CallToolResult:
+    """Format an error as an LLM-facing ``is_error`` result, never raising.
+
+    No ``structured_content`` is set: an error result carries no structured
+    payload (mcp SDK's ``convert_result`` only validates ``structured_content``
+    against the tool's output model when ``is_error`` is false).
 
     Args:
         exc: The exception that was raised.
@@ -81,7 +87,8 @@ def format_error(
         hints: Optional list of actionable recovery suggestions.
 
     Returns:
-        Markdown-formatted error string.
+        A ``CallToolResult`` with ``is_error=True`` and the same
+        markdown-formatted error prose this helper has always produced.
     """
     lines = [f"**Error**: {exc}"]
     if context:
@@ -89,7 +96,27 @@ def format_error(
     if hints:
         lines.append("\n**Try:**")
         lines.extend(f"- {h}" for h in hints)
-    return "\n".join(lines)
+    text = "\n".join(lines)
+    return CallToolResult(content=[TextContent(type="text", text=text)], is_error=True)
+
+
+def rows_to_dicts(rows: list[Any]) -> list[dict[str, Any]]:
+    """Coerce a list of AMI result rows into plain JSON-serializable dicts.
+
+    ``DOMObject.get_rows()`` normally returns a list of ``OrderedDict``, but
+    some AMI result shapes are plain values -- this keeps the structured
+    payload's schema uniform (a list of objects) either way.
+
+    Args:
+        rows: List of rows as returned by ``DOMObject.get_rows()``.
+
+    Returns:
+        List of plain ``dict`` objects, one per row.
+    """
+    return [
+        dict(row) if isinstance(row, (dict, OrderedDict)) else {"value": str(row)}
+        for row in rows
+    ]
 
 
 async def run_ami_sync(func: Any, *args: Any, **kwargs: Any) -> Any:

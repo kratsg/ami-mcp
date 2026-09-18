@@ -5,13 +5,47 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from mcp.server.mcpserver import Context, MCPServer  # noqa: TC002
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
+from pydantic import BaseModel
+
+from ami_mcp.tools._helpers import format_error
 
 log = logging.getLogger()
 
 _DEFAULT_PMGXSEC_PATH = "/cvmfs/atlas.cern.ch/repo/sw/database/GroupData/dev/PMGTools"
+
+
+class AmiXsecDatabase(BaseModel):
+    """One PMG cross-section database file."""
+
+    file: str
+    campaign: str
+
+
+class AmiListXsecDatabasesResult(BaseModel):
+    """Structured result of ``ami_list_xsec_databases``."""
+
+    path: str
+    databases: list[AmiXsecDatabase]
+
+
+class AmiXsecEntry(BaseModel):
+    """One matching row from a PMG cross-section database file."""
+
+    source: str
+    fields: dict[str, str]
+
+
+class AmiLookupXsecResult(BaseModel):
+    """Structured result of ``ami_lookup_xsec``."""
+
+    dsid: int
+    database: str | None
+    etag: str | None
+    entries: list[AmiXsecEntry]
 
 
 def _get_xsec_path() -> Path:
@@ -114,11 +148,17 @@ def _format_xsec_rows(rows: list[dict[str, str]]) -> str:
 def register(mcp: MCPServer) -> None:
     """Register PMG cross-section database tools."""
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            title="List PMG cross-section databases",
+            read_only_hint=True,
+            open_world_hint=True,
+        )
+    )
     async def ami_list_xsec_databases(  # pylint: disable=unused-argument
         *,
         ctx: Context[Any, Any],  # noqa: ARG001
-    ) -> str:
+    ) -> Annotated[CallToolResult, AmiListXsecDatabasesResult]:
         """List available PMG cross-section database files.
 
         Scans the ATLAS_PMGXSEC_PATH directory (default:
@@ -129,15 +169,32 @@ def register(mcp: MCPServer) -> None:
         """
         xsec_path = _get_xsec_path()
         if not xsec_path.is_dir():
-            return (
-                f"Error: ATLAS_PMGXSEC_PATH={xsec_path!r} does not exist or "
-                "is not a directory. Set ATLAS_PMGXSEC_PATH to the directory "
-                "containing PMGxsecDB_*.txt files."
+            return format_error(
+                ValueError(
+                    f"ATLAS_PMGXSEC_PATH={xsec_path!r} does not exist or "
+                    "is not a directory."
+                ),
+                hints=[
+                    (
+                        "Set ATLAS_PMGXSEC_PATH to the directory containing "
+                        "PMGxsecDB_*.txt files."
+                    )
+                ],
             )
 
         db_files = sorted(xsec_path.glob("PMGxsecDB*.txt"))
         if not db_files:
-            return f"No PMGxsecDB*.txt files found in {xsec_path}"
+            return CallToolResult(
+                content=[
+                    TextContent(
+                        type="text",
+                        text=f"No PMGxsecDB*.txt files found in {xsec_path}",
+                    )
+                ],
+                structured_content=AmiListXsecDatabasesResult(
+                    path=str(xsec_path), databases=[]
+                ).model_dump(mode="json"),
+            )
 
         lines = [
             "## PMG Cross-Section Databases",
@@ -147,22 +204,37 @@ def register(mcp: MCPServer) -> None:
             "| File | Campaign |",
             "| --- | --- |",
         ]
+        databases: list[AmiXsecDatabase] = []
         for f in db_files:
             # Extract campaign name from filename: PMGxsecDB_mc16.txt -> mc16
             stem = f.stem  # e.g. PMGxsecDB_mc16
             campaign = stem.replace("PMGxsecDB_", "").replace("PMGxsecDB", "")
             lines.append(f"| {f.name} | {campaign or 'unknown'} |")
+            databases.append(
+                AmiXsecDatabase(file=f.name, campaign=campaign or "unknown")
+            )
 
-        return "\n".join(lines)
+        text = "\n".join(lines)
+        payload = AmiListXsecDatabasesResult(path=str(xsec_path), databases=databases)
+        return CallToolResult(
+            content=[TextContent(type="text", text=text)],
+            structured_content=payload.model_dump(mode="json"),
+        )
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            title="Look up a cross-section",
+            read_only_hint=True,
+            open_world_hint=True,
+        )
+    )
     async def ami_lookup_xsec(  # pylint: disable=unused-argument
         dsid: int,
         database: str | None = None,
         etag: str | None = None,
         *,
         ctx: Context[Any, Any],  # noqa: ARG001
-    ) -> str:
+    ) -> Annotated[CallToolResult, AmiLookupXsecResult]:
         """Look up cross-section, filter efficiency, and k-factor for a DSID.
 
         Use this to get the official PMG cross-section for a DSID. More
@@ -193,22 +265,54 @@ def register(mcp: MCPServer) -> None:
             # Search all available DB files
             db_files = sorted(xsec_path.glob("PMGxsecDB*.txt"))
             if not db_files:
-                return f"No PMGxsecDB*.txt files found in {xsec_path}"
+                return CallToolResult(
+                    content=[
+                        TextContent(
+                            type="text",
+                            text=f"No PMGxsecDB*.txt files found in {xsec_path}",
+                        )
+                    ],
+                    structured_content=AmiLookupXsecResult(
+                        dsid=dsid, database=database, etag=etag, entries=[]
+                    ).model_dump(mode="json"),
+                )
             all_sections: list[str] = []
+            entries: list[AmiXsecEntry] = []
             for each_db in db_files:
                 try:
                     rows = _parse_db_file(each_db, dsid, etag)
                     if rows:
                         formatted = _format_xsec_rows(rows)
                         all_sections.append(f"### {each_db.name}\n\n{formatted}")
+                        entries.extend(
+                            AmiXsecEntry(source=each_db.name, fields=row)
+                            for row in rows
+                        )
                 except Exception:  # noqa: PERF203
                     log.exception("Uncaught exception")
                     continue
             if not all_sections:
-                return f"No matching entries found for DSID {dsid} in any database."
+                return CallToolResult(
+                    content=[
+                        TextContent(
+                            type="text",
+                            text=f"No matching entries found for DSID {dsid} in any database.",
+                        )
+                    ],
+                    structured_content=AmiLookupXsecResult(
+                        dsid=dsid, database=database, etag=etag, entries=[]
+                    ).model_dump(mode="json"),
+                )
             body = "\n\n".join(all_sections)
-            return f"{body}\n\n---\n**Next steps:**\n" + "\n".join(
+            text = f"{body}\n\n---\n**Next steps:**\n" + "\n".join(
                 f"- {h}" for h in _next_hints
+            )
+            payload = AmiLookupXsecResult(
+                dsid=dsid, database=database, etag=etag, entries=entries
+            )
+            return CallToolResult(
+                content=[TextContent(type="text", text=text)],
+                structured_content=payload.model_dump(mode="json"),
             )
 
         # Resolve named_db from the database argument
@@ -221,18 +325,29 @@ def register(mcp: MCPServer) -> None:
         if not named_db.exists():
             available = sorted(xsec_path.glob("PMGxsecDB*.txt"))
             names = ", ".join(f.name for f in available) if available else "none"
-            return (
-                f"Error: database file {named_db.name!r} not found in {xsec_path}.\n"
-                f"Available files: {names}"
+            return format_error(
+                ValueError(
+                    f"database file {named_db.name!r} not found in {xsec_path}."
+                ),
+                hints=[f"Available files: {names}"],
             )
 
         try:
             rows = _parse_db_file(named_db, dsid, etag)
         except Exception as exc:  # noqa: BLE001
-            return f"Error reading {named_db.name}: {exc}"
-        result = _format_xsec_rows(rows)
+            return format_error(exc, context=f"While reading {named_db.name}.")
+        result_text = _format_xsec_rows(rows)
+        entries = [AmiXsecEntry(source=named_db.name, fields=row) for row in rows]
         if rows:
-            return f"{result}\n\n---\n**Next steps:**\n" + "\n".join(
+            text = f"{result_text}\n\n---\n**Next steps:**\n" + "\n".join(
                 f"- {h}" for h in _next_hints
             )
-        return result
+        else:
+            text = result_text
+        payload = AmiLookupXsecResult(
+            dsid=dsid, database=database, etag=etag, entries=entries
+        )
+        return CallToolResult(
+            content=[TextContent(type="text", text=text)],
+            structured_content=payload.model_dump(mode="json"),
+        )

@@ -2,27 +2,45 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from mcp.server.mcpserver import Context, MCPServer  # noqa: TC002
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
+from pydantic import BaseModel
 
 from ami_mcp.tools._helpers import (
     append_next_actions,
     format_ami_result,
     format_error,
+    rows_to_dicts,
     run_ami_command,
 )
+
+
+class AmiTagInfoResult(BaseModel):
+    """Structured result of ``ami_get_ami_tag``."""
+
+    tag: str
+    first_tag: str
+    remaining_tags: list[str]
+    rows: list[dict[str, Any]]
 
 
 def register(mcp: MCPServer) -> None:
     """Register AMI tag info tools."""
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            title="Get AMI tag info",
+            read_only_hint=True,
+            open_world_hint=True,
+        )
+    )
     async def ami_get_ami_tag(
         tag: str,
         *,
         ctx: Context[Any, Any],
-    ) -> str:
+    ) -> Annotated[CallToolResult, AmiTagInfoResult]:
         """Get information about an AMI processing tag.
 
         AMI tags record the configuration of each processing step. Tag letters:
@@ -60,4 +78,13 @@ def register(mcp: MCPServer) -> None:
                     f"To look up remaining tags in this chain, call separately with: {remaining_str}"
                 )
             output = append_next_actions(output, hints)
-        return output
+        payload = AmiTagInfoResult(
+            tag=tag,
+            first_tag=first_tag,
+            remaining_tags=remaining,
+            rows=rows_to_dicts(rows),
+        )
+        return CallToolResult(
+            content=[TextContent(type="text", text=output)],
+            structured_content=payload.model_dump(mode="json"),
+        )

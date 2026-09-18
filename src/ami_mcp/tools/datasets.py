@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any
+from typing import Annotated, Any
 
 from mcp.server.mcpserver import Context, MCPServer  # noqa: TC002
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
+from pydantic import BaseModel
 
 from ami_mcp.tools._helpers import (
     append_next_actions,
     format_ami_result,
     format_error,
+    rows_to_dicts,
     run_ami_command,
     scope_to_catalog,
 )
@@ -34,15 +37,48 @@ _DATASET_INFO_FIELDS = [
 ]
 
 
+class AmiDatasetInfoResult(BaseModel):
+    """Structured result of ``ami_get_dataset_info``."""
+
+    dataset: str
+    found: bool
+    fields: dict[str, str]
+
+
+class AmiDatasetProvResult(BaseModel):
+    """Structured result of ``ami_get_dataset_prov``."""
+
+    dataset: str
+    found: bool
+    summary: str
+    nodes: list[dict[str, Any]]
+    edges: list[dict[str, Any]]
+
+
+class AmiListDatasetsResult(BaseModel):
+    """Structured result of ``ami_list_datasets``."""
+
+    patterns: str
+    project: str
+    rows: list[dict[str, Any]]
+    total: int
+
+
 def register(mcp: MCPServer) -> None:
     """Register dataset info tools."""
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            title="Get dataset info",
+            read_only_hint=True,
+            open_world_hint=True,
+        )
+    )
     async def ami_get_dataset_info(
         dataset: str,
         *,
         ctx: Context[Any, Any],
-    ) -> str:
+    ) -> Annotated[CallToolResult, AmiDatasetInfoResult]:
         """Get metadata for an ATLAS dataset (LDN) from AMI.
 
         Returns key fields: nFiles, nEvents, totalSize, crossSection, genFiltEff,
@@ -58,7 +94,12 @@ def register(mcp: MCPServer) -> None:
             result = await run_ami_command(ctx, command)
             rows = result.get_rows()
             if not rows:
-                return "No results."
+                return CallToolResult(
+                    content=[TextContent(type="text", text="No results.")],
+                    structured_content=AmiDatasetInfoResult(
+                        dataset=dataset, found=False, fields={}
+                    ).model_dump(mode="json"),
+                )
             # Filter to curated fields; fall back to all fields if none match
             row = rows[0]
             filtered = {k: v for k, v in row.items() if k in _DATASET_INFO_FIELDS}
@@ -84,7 +125,16 @@ def register(mcp: MCPServer) -> None:
                     "nFiles=0: dataset may be deleted or not yet produced. Check prodsysStatus.",
                 )
 
-            return append_next_actions(output, hints)
+            text = append_next_actions(output, hints)
+            payload = AmiDatasetInfoResult(
+                dataset=dataset,
+                found=True,
+                fields={k: str(v) for k, v in (filtered or dict(row)).items()},
+            )
+            return CallToolResult(
+                content=[TextContent(type="text", text=text)],
+                structured_content=payload.model_dump(mode="json"),
+            )
         except Exception as exc:  # noqa: BLE001
             return format_error(
                 exc,
@@ -94,13 +144,19 @@ def register(mcp: MCPServer) -> None:
                 ],
             )
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            title="Get dataset provenance",
+            read_only_hint=True,
+            open_world_hint=True,
+        )
+    )
     async def ami_get_dataset_prov(
         dataset: str,
         data_types: str | None = "EVNT,HITS,RDO,ESD,AOD,HEPMC,DAOD_",
         *,
         ctx: Context[Any, Any],
-    ) -> str:
+    ) -> Annotated[CallToolResult, AmiDatasetProvResult]:
         """Get the provenance (parent/child chain) for an ATLAS dataset.
 
         Use this to trace a DAOD back to its EVNT, or to find derived datasets
@@ -142,7 +198,12 @@ def register(mcp: MCPServer) -> None:
             edges = result.get_rows("edge")
 
             if not nodes:
-                return "No provenance found."
+                return CallToolResult(
+                    content=[TextContent(type="text", text="No provenance found.")],
+                    structured_content=AmiDatasetProvResult(
+                        dataset=dataset, found=False, summary="", nodes=[], edges=[]
+                    ).model_dump(mode="json"),
+                )
 
             # ------------------------------------------------------------
             # 1. Parse data_types filter
@@ -169,7 +230,16 @@ def register(mcp: MCPServer) -> None:
             # ------------------------------------------------------------
             filtered_nodes = [n for n in nodes if keep_type(n.get("dataType"))]
             if not filtered_nodes:
-                return "No nodes remain after filtering."
+                return CallToolResult(
+                    content=[
+                        TextContent(
+                            type="text", text="No nodes remain after filtering."
+                        )
+                    ],
+                    structured_content=AmiDatasetProvResult(
+                        dataset=dataset, found=False, summary="", nodes=[], edges=[]
+                    ).model_dump(mode="json"),
+                )
 
             # ------------------------------------------------------------
             # 3. Filter edges (only between surviving nodes)
@@ -224,9 +294,20 @@ def register(mcp: MCPServer) -> None:
 
             output = "\n\n".join(parts)
 
-            return append_next_actions(
+            text = append_next_actions(
                 output,
                 ["Use `ami_get_dataset_info` on any node LDN for its metadata."],
+            )
+            payload = AmiDatasetProvResult(
+                dataset=dataset,
+                found=True,
+                summary=summary,
+                nodes=rows_to_dicts(filtered_nodes),
+                edges=rows_to_dicts(filtered_edges),
+            )
+            return CallToolResult(
+                content=[TextContent(type="text", text=text)],
+                structured_content=payload.model_dump(mode="json"),
             )
 
         except Exception as exc:  # noqa: BLE001
@@ -239,7 +320,13 @@ def register(mcp: MCPServer) -> None:
                 ],
             )
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            title="List datasets",
+            read_only_hint=True,
+            open_world_hint=True,
+        )
+    )
     async def ami_list_datasets(
         patterns: str,
         project: str,
@@ -248,7 +335,7 @@ def register(mcp: MCPServer) -> None:
         limit: int = 100,
         *,
         ctx: Context[Any, Any],
-    ) -> str:
+    ) -> Annotated[CallToolResult, AmiListDatasetsResult]:
         """List ATLAS datasets matching a physicsShort pattern via AMI SearchQuery.
 
         Searches the AMI dataset catalog using the physicsShort field (the
@@ -307,4 +394,13 @@ def register(mcp: MCPServer) -> None:
                     "Use `ami_get_physics_params` on an EVNT LDN for cross-section details.",
                 ],
             )
-        return output
+        payload = AmiListDatasetsResult(
+            patterns=patterns,
+            project=project,
+            rows=rows_to_dicts(rows),
+            total=len(rows),
+        )
+        return CallToolResult(
+            content=[TextContent(type="text", text=output)],
+            structured_content=payload.model_dump(mode="json"),
+        )

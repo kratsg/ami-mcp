@@ -1,11 +1,34 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
 import pytest
+from mcp.types import TextContent
 
 from ami_mcp.auth.factory import EnvBasedClientFactory
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from mcp.types import CallToolResult
+
+
+@pytest.fixture
+def tool_text() -> Callable[[CallToolResult], str]:
+    """Return a helper that extracts a tool's CallToolResult's markdown text block.
+
+    Every ami_* tool returns exactly one TextContent block alongside its
+    (optional) structured_content -- this is the substring-assertion
+    equivalent of the plain-string return the tools used to have.
+    """
+
+    def _tool_text(result: CallToolResult) -> str:
+        block = result.content[0]
+        assert isinstance(block, TextContent)
+        return block.text
+
+    return _tool_text
 
 
 @pytest.fixture

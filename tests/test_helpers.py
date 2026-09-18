@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from collections import OrderedDict
 
-from ami_mcp.tools._helpers import format_ami_result
+from mcp.types import CallToolResult
+
+from ami_mcp.tools._helpers import format_ami_result, format_error, rows_to_dicts
 
 
 class TestFormatAmiResult:
@@ -71,3 +73,38 @@ class TestFormatAmiResult:
         result = format_ami_result(rows)
         assert "| col0 |" in result
         assert "| Field | Value |" not in result
+
+
+class TestFormatError:
+    def test_returns_an_is_error_call_tool_result(self) -> None:
+        result = format_error(ValueError("bad"))
+        assert isinstance(result, CallToolResult)
+        assert result.is_error is True
+        assert result.structured_content is None
+
+    def test_message_carries_the_exception_text(self) -> None:
+        result = format_error(ValueError("bad thing happened"))
+        assert "bad thing happened" in result.content[0].text  # type: ignore[union-attr]
+
+    def test_context_is_appended(self) -> None:
+        result = format_error(ValueError("bad"), context="extra context")
+        assert "extra context" in result.content[0].text  # type: ignore[union-attr]
+
+    def test_hints_are_appended(self) -> None:
+        result = format_error(ValueError("bad"), hints=["Try again."])
+        assert "Try again." in result.content[0].text  # type: ignore[union-attr]
+
+
+class TestRowsToDicts:
+    def test_ordered_dict_rows_pass_through_as_plain_dicts(self) -> None:
+        rows = [OrderedDict([("NAME", "WeakBoson")])]
+        assert rows_to_dicts(rows) == [{"NAME": "WeakBoson"}]
+
+    def test_non_dict_rows_are_wrapped_in_a_value_key(self) -> None:
+        assert rows_to_dicts(["alpha", "beta"]) == [
+            {"value": "alpha"},
+            {"value": "beta"},
+        ]
+
+    def test_empty_list_returns_empty_list(self) -> None:
+        assert rows_to_dicts([]) == []

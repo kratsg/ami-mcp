@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from mcp.server.mcpserver import Context, MCPServer  # noqa: TC002
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
+from pydantic import BaseModel
 
-from ami_mcp.tools._helpers import run_ami_command
+from ami_mcp.tools._helpers import format_error, run_ami_command
 from ami_mcp.tools.xsecdb import _get_xsec_path, _parse_db_file
 
 if TYPE_CHECKING:
@@ -21,12 +23,29 @@ _XSEC_COMPARE_FIELDS = [
 ]
 
 
+class AmiValidateDatasetResult(BaseModel):
+    """Per-dataset structured result within ``ami_validate_sample``."""
+
+    dataset: str
+    hashtags: dict[str, list[str]] = {}
+    ami_params: dict[str, str] = {}
+    comparisons: list[str] = []
+    errors: list[str] = []
+
+
+class AmiValidateSampleResult(BaseModel):
+    """Structured result of ``ami_validate_sample``."""
+
+    datasets: list[AmiValidateDatasetResult]
+
+
 def _compare_xsec_row(
     section_lines: list[str],
     db_row: dict[str, str],
     ami_params: dict[str, str],
-) -> None:
-    """Append OK/WARNING bullet lines comparing AMI params against one DB row."""
+) -> list[str]:
+    """Append and return OK/WARNING bullet lines comparing AMI params against one DB row."""
+    comparisons: list[str] = []
     for ami_key, db_key, unit_factor, label in _XSEC_COMPARE_FIELDS:
         if db_key not in db_row:
             continue
@@ -38,13 +57,14 @@ def _compare_xsec_row(
             ami_val = float(ami_val_str) * unit_factor
             db_val = float(db_val_str)
             if abs(ami_val - db_val) > 1e-6 * max(abs(db_val), 1.0):
-                section_lines.append(
-                    f"- **WARNING**: AMI {label}={ami_val:.6g} != DB {label}={db_val:.6g}"
-                )
+                line = f"- **WARNING**: AMI {label}={ami_val:.6g} != DB {label}={db_val:.6g}"
             else:
-                section_lines.append(f"- **OK**: {label}={db_val:.6g} (matches DB)")
+                line = f"- **OK**: {label}={db_val:.6g} (matches DB)"
         except (ValueError, TypeError):
-            pass
+            continue
+        section_lines.append(line)
+        comparisons.append(line)
+    return comparisons
 
 
 def _xsec_db_section(
@@ -52,8 +72,8 @@ def _xsec_db_section(
     ldn: str,
     database: str,
     ami_params: dict[str, str],
-) -> None:
-    """Append cross-section DB comparison lines to section_lines."""
+) -> list[str]:
+    """Append cross-section DB comparison lines to section_lines and return the comparison bullets."""
     xsec_path = _get_xsec_path()
     db_file: Path = (
         xsec_path / database
@@ -65,7 +85,7 @@ def _xsec_db_section(
         section_lines.append(
             f"*xsec DB: file {db_file.name!r} not found — skipping comparison*"
         )
-        return
+        return []
 
     parts = ldn.split(".")
     dsid: int | None = None
@@ -80,7 +100,7 @@ def _xsec_db_section(
 
     if dsid is None:
         section_lines.append("*xsec DB: could not extract DSID from LDN*")
-        return
+        return []
 
     try:
         db_rows = _parse_db_file(db_file, dsid, etag)
@@ -90,25 +110,33 @@ def _xsec_db_section(
                 + (f" etag {etag}" if etag else "")
                 + " not found in DB*"
             )
-        else:
-            section_lines.append("### Cross-Section Comparison")
-            section_lines.append("")
-            _compare_xsec_row(section_lines, db_rows[0], ami_params)
-            section_lines.append("")
+            return []
+        section_lines.append("### Cross-Section Comparison")
+        section_lines.append("")
+        comparisons = _compare_xsec_row(section_lines, db_rows[0], ami_params)
+        section_lines.append("")
     except Exception as exc:  # noqa: BLE001
         section_lines.append(f"*xsec DB comparison error: {exc}*")
+        return []
+    return comparisons
 
 
 def register(mcp: MCPServer) -> None:
     """Register validation tools."""
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            title="Validate ATLAS MC samples",
+            read_only_hint=True,
+            open_world_hint=True,
+        )
+    )
     async def ami_validate_sample(
         datasets: str,
         database: str | None = None,
         *,
         ctx: Context[Any, Any],
-    ) -> str:
+    ) -> Annotated[CallToolResult, AmiValidateSampleResult]:
         """Validate ATLAS MC samples: check hashtag classification and metadata.
 
         For each dataset LDN provided:
@@ -126,14 +154,17 @@ def register(mcp: MCPServer) -> None:
         """
         ldn_list = [ln.strip() for ln in datasets.splitlines() if ln.strip()]
         if not ldn_list:
-            return "Error: no dataset LDNs provided."
+            return format_error(ValueError("no dataset LDNs provided."))
 
         output_sections: list[str] = []
+        dataset_results: list[AmiValidateDatasetResult] = []
 
         for ldn in ldn_list:
             section_lines = [f"## {ldn}", ""]
+            errors: list[str] = []
 
             # --- Hashtag lookup ---
+            by_scope: dict[str, list[str]] = {}
             try:
                 hashtag_result = await run_ami_command(
                     ctx,
@@ -141,7 +172,6 @@ def register(mcp: MCPServer) -> None:
                 )
                 hashtag_rows = hashtag_result.get_rows()
                 if hashtag_rows:
-                    by_scope: dict[str, list[str]] = {}
                     for row in hashtag_rows:
                         # AMI returns lowercase keys: 'scope', 'name'
                         scope = row.get("scope") or row.get("SCOPE", "?")
@@ -151,7 +181,7 @@ def register(mcp: MCPServer) -> None:
                     section_lines.append("")
                     section_lines.append("| Level | Tags |")
                     section_lines.append("| --- | --- |")
-                    _none = "\u2014"
+                    _none = "—"
                     for level in ("PMGL1", "PMGL2", "PMGL3", "PMGL4"):
                         names = by_scope.get(level, [])
                         tag_str = ", ".join(names) if names else _none
@@ -161,8 +191,10 @@ def register(mcp: MCPServer) -> None:
                     section_lines.append("*No hashtags found in AMI.*")
                     section_lines.append("")
             except Exception as exc:  # noqa: BLE001
-                section_lines.append(f"*Hashtag lookup error: {exc}*")
+                error_line = f"Hashtag lookup error: {exc}"
+                section_lines.append(f"*{error_line}*")
                 section_lines.append("")
+                errors.append(error_line)
 
             # --- Physics params from AMI ---
             ami_params: dict[str, str] = {}
@@ -175,13 +207,30 @@ def register(mcp: MCPServer) -> None:
                 if phys_rows:
                     ami_params = dict(phys_rows[0])
             except Exception as exc:  # noqa: BLE001
-                section_lines.append(f"*Physics params lookup error: {exc}*")
+                error_line = f"Physics params lookup error: {exc}"
+                section_lines.append(f"*{error_line}*")
                 section_lines.append("")
+                errors.append(error_line)
 
             # --- Cross-section DB comparison ---
+            comparisons: list[str] = []
             if database is not None and ami_params:
-                _xsec_db_section(section_lines, ldn, database, ami_params)
+                comparisons = _xsec_db_section(section_lines, ldn, database, ami_params)
 
             output_sections.append("\n".join(section_lines))
+            dataset_results.append(
+                AmiValidateDatasetResult(
+                    dataset=ldn,
+                    hashtags=by_scope,
+                    ami_params={str(k): str(v) for k, v in ami_params.items()},
+                    comparisons=comparisons,
+                    errors=errors,
+                )
+            )
 
-        return "\n\n".join(output_sections)
+        text = "\n\n".join(output_sections)
+        payload = AmiValidateSampleResult(datasets=dataset_results)
+        return CallToolResult(
+            content=[TextContent(type="text", text=text)],
+            structured_content=payload.model_dump(mode="json"),
+        )

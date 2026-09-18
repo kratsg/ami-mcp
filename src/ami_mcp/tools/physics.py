@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from mcp.server.mcpserver import Context, MCPServer  # noqa: TC002
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
+from pydantic import BaseModel
 
 from ami_mcp.tools._helpers import (
     append_next_actions,
@@ -13,15 +15,36 @@ from ami_mcp.tools._helpers import (
 )
 
 
+class AmiPhysicsParam(BaseModel):
+    """One physics parameter value, as registered in AMI."""
+
+    value: str
+    units: str = ""
+
+
+class AmiPhysicsParamsResult(BaseModel):
+    """Structured result of ``ami_get_physics_params``."""
+
+    dataset: str
+    found: bool
+    params: dict[str, AmiPhysicsParam]
+
+
 def register(mcp: MCPServer) -> None:
     """Register physics parameter tools."""
 
-    @mcp.tool()
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            title="Get physics parameters",
+            read_only_hint=True,
+            open_world_hint=True,
+        )
+    )
     async def ami_get_physics_params(
         dataset: str,
         *,
         ctx: Context[Any, Any],
-    ) -> str:
+    ) -> Annotated[CallToolResult, AmiPhysicsParamsResult]:
         """Get physics parameters (cross-section, filter efficiency, k-factor) for a dataset.
 
         Uses GetPhysicsParamsForDataset to retrieve the generator-level physics
@@ -52,7 +75,14 @@ def register(mcp: MCPServer) -> None:
             result = await run_ami_command(ctx, command)
             rows = result.get_rows()
             if not rows:
-                return "No physics parameters found."
+                return CallToolResult(
+                    content=[
+                        TextContent(type="text", text="No physics parameters found.")
+                    ],
+                    structured_content=AmiPhysicsParamsResult(
+                        dataset=dataset, found=False, params={}
+                    ).model_dump(mode="json"),
+                )
 
             # AMI may return multiple rows with the same keys (one per registered
             # parameter group). Deduplicate: keep first non-empty value per key.
@@ -65,7 +95,14 @@ def register(mcp: MCPServer) -> None:
                     params[name] = (value, units if units.lower() != "null" else "")
 
             if not params:
-                return "No physics parameters found."
+                return CallToolResult(
+                    content=[
+                        TextContent(type="text", text="No physics parameters found.")
+                    ],
+                    structured_content=AmiPhysicsParamsResult(
+                        dataset=dataset, found=False, params={}
+                    ).model_dump(mode="json"),
+                )
 
             # Build table
             table_rows: list[str] = []
@@ -83,7 +120,14 @@ def register(mcp: MCPServer) -> None:
                     table_rows.append(f"| {name} | {value} {units} |")
 
             if not table_rows:
-                return "No physics parameters found."
+                return CallToolResult(
+                    content=[
+                        TextContent(type="text", text="No physics parameters found.")
+                    ],
+                    structured_content=AmiPhysicsParamsResult(
+                        dataset=dataset, found=False, params={}
+                    ).model_dump(mode="json"),
+                )
             lines = [
                 "## Physics Parameters",
                 "",
@@ -92,12 +136,24 @@ def register(mcp: MCPServer) -> None:
                 *table_rows,
             ]
             output = prefix + "\n".join(lines)
-            return append_next_actions(
+            text = append_next_actions(
                 output,
                 [
                     "Use `ami_lookup_xsec` to cross-check against the official PMG database.",
                     "Use `ami_validate_sample` for automated comparison against the PMG xsec DB.",
                 ],
+            )
+            payload = AmiPhysicsParamsResult(
+                dataset=dataset,
+                found=True,
+                params={
+                    name: AmiPhysicsParam(value=value, units=units)
+                    for name, (value, units) in params.items()
+                },
+            )
+            return CallToolResult(
+                content=[TextContent(type="text", text=text)],
+                structured_content=payload.model_dump(mode="json"),
             )
         except Exception as exc:  # noqa: BLE001
             return format_error(
