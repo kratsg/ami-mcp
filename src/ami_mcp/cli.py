@@ -98,10 +98,33 @@ def main() -> None:
         default="info",
         help="uvicorn log level for HTTP transport (default: info)",
     )
+    serve_parser.add_argument(
+        "--allow-command",
+        action="append",
+        dest="allow_commands",
+        default=None,
+        metavar="VERB",
+        help=(
+            "Additional AMI command verb ami_execute may run, on top of the "
+            "built-in read-only set (repeatable; comma-separated values also "
+            "accepted; env: AMI_MCP_ALLOW_COMMANDS). Extend-only: the built-in "
+            "verbs can never be removed. The flag replaces the env var."
+        ),
+    )
 
     args = parser.parse_args()
 
     if args.command == "serve":
+        # Not folded into --allow-command's default=: argparse's "append"
+        # action appends onto the default rather than replacing it, so
+        # AMI_MCP_ALLOW_COMMANDS=X plus --allow-command Y would silently
+        # union the two instead of the flag replacing the env var like every
+        # other setting here.
+        allow_commands = args.allow_commands
+        if allow_commands is None:
+            env_allow_commands = os.environ.get("AMI_MCP_ALLOW_COMMANDS")
+            allow_commands = [env_allow_commands] if env_allow_commands else None
+
         serve(
             transport=args.transport,
             host=args.host,
@@ -115,6 +138,7 @@ def main() -> None:
             audience=args.audience,
             forwarded_allow_ips=args.forwarded_allow_ips,
             log_level=args.log_level,
+            allow_commands=allow_commands,
         )
     else:
         parser.print_help()

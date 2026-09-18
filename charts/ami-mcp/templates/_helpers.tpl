@@ -138,5 +138,12 @@ the process table; likewise the broker URL rides AMI_MCP_BROKER_URL.
 {{- $args = append $args "--resource-url" -}}
 {{- $args = append $args . -}}
 {{- end -}}
+{{- range .Values.server.allowCommands -}}
+{{- if not (regexMatch "^[A-Za-z][A-Za-z0-9_]*$" .) -}}
+{{- fail (printf "server.allowCommands entry %q is not a bare AMI command verb" .) -}}
+{{- end -}}
+{{- $args = append $args "--allow-command" -}}
+{{- $args = append $args . -}}
+{{- end -}}
 {{- $args | join " " -}}
 {{- end }}

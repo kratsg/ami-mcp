@@ -43,10 +43,19 @@ server:
   # derived as https://<ingress.host> when the ingress is enabled, else the
   # server falls back to http://<host>:<port>.
   resourceUrl: ""
+  # Extra AMI command verbs ami_execute may run, on top of the built-in
+  # read-only set (SearchQuery, AMIGetDatasetInfo, AMIGetDatasetProv,
+  # AMIGetAMITagInfo, GetPhysicsParamsForDataset, DatasetWBListHashtags,
+  # DatasetWBListDatasetsForHashtag). Extend-only: listing fewer verbs here
+  # cannot narrow the defaults. Each entry renders one --allow-command flag.
+  allowCommands: []
 
 ami:
-  # AMI server endpoint (AMI_ENDPOINT). atlas-replica is the read-only replica
-  # recommended for queries.
+  # AMI server endpoint (AMI_ENDPOINT). Despite the name, atlas-replica and
+  # atlas resolve to the identical AMI host/port/path -- the endpoint choice
+  # is a naming convention, not a write-protection guarantee. What keeps
+  # ami-mcp read-only is that every tool issues read-oriented AMI commands,
+  # enforced for ami_execute by server.allowCommands above.
   endpoint: atlas-replica
   # Directory of PMGxsecDB_<campaign>.txt files (ATLAS_PMGXSEC_PATH). Empty =
   # the server's built-in default (the CVMFS PMGTools directory). Only useful

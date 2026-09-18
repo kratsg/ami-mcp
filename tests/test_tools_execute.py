@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from mcp.server.mcpserver import MCPServer
 
+from ami_mcp.policy import resolve_allowed_commands
 from ami_mcp.tools.execute import register
 
 if TYPE_CHECKING:
@@ -91,7 +92,10 @@ class TestAmiExecute:
             new=AsyncMock(return_value=result_mock),
         ):
             fn = registered_tools["ami_execute"]
-            result = await fn(command="SomeQuery", ctx=mock_ctx)
+            result = await fn(
+                command="SearchQuery -catalog=mc23_001:production -entity=HASHTAGS",
+                ctx=mock_ctx,
+            )
 
         assert "No results" in tool_text(result)
         assert result.structured_content is not None
@@ -109,8 +113,138 @@ class TestAmiExecute:
             new=AsyncMock(side_effect=RuntimeError("auth failed")),
         ):
             fn = registered_tools["ami_execute"]
-            result = await fn(command="BadCommand", ctx=mock_ctx)
+            result = await fn(command="SearchQuery -bogus", ctx=mock_ctx)
 
         assert "Error" in tool_text(result)
         assert result.is_error is True
         assert result.structured_content is None
+
+
+class TestAmiExecuteAllowlist:
+    async def test_allows_a_default_verb(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        result_mock = MagicMock()
+        result_mock.get_rows.return_value = []
+        mock_run = AsyncMock(return_value=result_mock)
+
+        with patch("ami_mcp.tools.execute.run_ami_command", new=mock_run):
+            fn = registered_tools["ami_execute"]
+            result = await fn(
+                command="SearchQuery -catalog=mc23_001:production -entity=HASHTAGS",
+                ctx=mock_ctx,
+            )
+
+        assert result.is_error is not True
+        assert result.structured_content is not None
+        assert mock_run.await_count == 1
+
+    async def test_rejects_a_non_allowlisted_verb(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+        tool_text: Callable[[CallToolResult], str],
+    ) -> None:
+        mock_run = AsyncMock()
+
+        with patch("ami_mcp.tools.execute.run_ami_command", new=mock_run):
+            fn = registered_tools["ami_execute"]
+            result = await fn(command="GetElementInfo -x=1", ctx=mock_ctx)
+
+        output = tool_text(result)
+        assert result.is_error is True
+        assert result.structured_content is None
+        assert "GetElementInfo" in output
+        assert "SearchQuery" in output
+        # The load-bearing assertion: AMI was never contacted.
+        assert mock_run.await_count == 0
+
+    async def test_rejects_an_empty_command(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+        tool_text: Callable[[CallToolResult], str],
+    ) -> None:
+        mock_run = AsyncMock()
+
+        with patch("ami_mcp.tools.execute.run_ami_command", new=mock_run):
+            fn = registered_tools["ami_execute"]
+            result = await fn(command="   ", ctx=mock_ctx)
+
+        assert result.is_error is True
+        assert "No AMI command" in tool_text(result)
+        assert mock_run.await_count == 0
+
+    async def test_rejects_a_verb_hidden_in_the_query_body(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        mock_run = AsyncMock()
+
+        with patch("ami_mcp.tools.execute.run_ami_command", new=mock_run):
+            fn = registered_tools["ami_execute"]
+            result = await fn(command='DeleteElement -mql="SearchQuery"', ctx=mock_ctx)
+
+        assert result.is_error is True
+        assert mock_run.await_count == 0
+
+    async def test_allows_a_verb_added_by_configuration(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        mock_ctx.request_context.lifespan_context["allowed_commands"] = (
+            resolve_allowed_commands(["GetElementInfo"])
+        )
+        result_mock = MagicMock()
+        result_mock.get_rows.return_value = []
+        mock_run = AsyncMock(return_value=result_mock)
+
+        with patch("ami_mcp.tools.execute.run_ami_command", new=mock_run):
+            fn = registered_tools["ami_execute"]
+            result = await fn(command="GetElementInfo -x=1", ctx=mock_ctx)
+
+        assert result.is_error is not True
+        assert mock_run.await_count == 1
+
+    async def test_defaults_apply_when_lifespan_carries_no_allowlist(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        del mock_ctx.request_context.lifespan_context["allowed_commands"]
+        result_mock = MagicMock()
+        result_mock.get_rows.return_value = []
+        mock_run = AsyncMock(return_value=result_mock)
+
+        with patch("ami_mcp.tools.execute.run_ami_command", new=mock_run):
+            fn = registered_tools["ami_execute"]
+            allowed_result = await fn(
+                command="SearchQuery -catalog=mc23_001:production -entity=HASHTAGS",
+                ctx=mock_ctx,
+            )
+            rejected_result = await fn(command="GetElementInfo -x=1", ctx=mock_ctx)
+
+        assert allowed_result.is_error is not True
+        assert rejected_result.is_error is True
+
+    async def test_matches_the_verb_case_insensitively(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        result_mock = MagicMock()
+        result_mock.get_rows.return_value = []
+        mock_run = AsyncMock(return_value=result_mock)
+
+        with patch("ami_mcp.tools.execute.run_ami_command", new=mock_run):
+            fn = registered_tools["ami_execute"]
+            result = await fn(
+                command="searchquery -catalog=mc23_001:production -entity=HASHTAGS",
+                ctx=mock_ctx,
+            )
+
+        assert result.is_error is not True

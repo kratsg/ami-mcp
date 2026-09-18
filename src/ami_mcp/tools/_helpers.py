@@ -8,7 +8,17 @@ from typing import Any
 
 from mcp.types import CallToolResult, TextContent
 
+from ami_mcp.policy import (
+    DEFAULT_ALLOWED_COMMANDS,
+    command_verb,
+    describe_allowed,
+    is_command_allowed,
+)
+
 _VERTICAL_THRESHOLD = 6
+
+#: Lifespan-context key holding the effective ``ami_execute`` allowlist.
+ALLOWED_COMMANDS_KEY = "allowed_commands"
 
 
 def format_ami_result(rows: list[Any], max_rows: int = 100) -> str:
@@ -98,6 +108,37 @@ def format_error(
         lines.extend(f"- {h}" for h in hints)
     text = "\n".join(lines)
     return CallToolResult(content=[TextContent(type="text", text=text)], is_error=True)
+
+
+def check_command_allowed(
+    lifespan_context: dict[str, Any], command: str
+) -> CallToolResult | None:
+    """Return an ``is_error`` result if *command*'s verb is not allowlisted, else None.
+
+    Enforced only by ``ami_execute`` -- the other tools build their own fixed
+    command strings and must never be blockable by deployment config.
+
+    Falls back to ``DEFAULT_ALLOWED_COMMANDS`` when the lifespan context
+    carries no allowlist, so a server built without the policy wiring still
+    enforces the documented default set rather than permitting everything.
+    """
+    allowed = lifespan_context.get(ALLOWED_COMMANDS_KEY) or DEFAULT_ALLOWED_COMMANDS
+    if is_command_allowed(command, allowed):
+        return None
+    verb = command_verb(command)
+    msg = (
+        f"AMI command verb {verb!r} is not permitted by this server's allowlist."
+        if verb
+        else "No AMI command was provided."
+    )
+    return format_error(
+        ValueError(msg),
+        hints=[
+            f"Permitted command verbs: {describe_allowed(allowed)}.",
+            "Read the ami://query-language resource for each command's syntax.",
+            "Use a specialized ami_* tool if one covers your query.",
+        ],
+    )
 
 
 def rows_to_dicts(rows: list[Any]) -> list[dict[str, Any]]:

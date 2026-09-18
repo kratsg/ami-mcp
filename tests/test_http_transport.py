@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 from starlette.testclient import TestClient
 
+from ami_mcp.policy import DEFAULT_ALLOWED_COMMANDS
 from ami_mcp.server import _make_broker_app, _make_shared_secret_app, serve
 
 if TYPE_CHECKING:
@@ -35,6 +36,7 @@ def client() -> Iterator[TestClient]:
         secret="s3cr3t",
         resource_url="http://testserver",
         host="127.0.0.1",
+        allowed_commands=DEFAULT_ALLOWED_COMMANDS,
     )
     # Enter the context manager so the app lifespan (and with it the mcp
     # session manager) actually runs. base_url must agree with host= above:
@@ -98,6 +100,7 @@ class TestBrokerMode:
             audience="ami",
             resource_url="http://127.0.0.1:8000",
             host="127.0.0.1",
+            allowed_commands=DEFAULT_ALLOWED_COMMANDS,
         )
         with TestClient(app, base_url="http://127.0.0.1:8000") as test_client:
             yield test_client

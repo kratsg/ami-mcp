@@ -125,6 +125,18 @@ extraVolumeMounts:
     mountPropagation: HostToContainer
 ```
 
+## Restricting `ami_execute`
+
+`ami_execute` only accepts commands whose leading verb is allowlisted (see
+[Configuration](configuration.md#ami_execute-command-allowlist) for the built-in
+set and what the allowlist does and doesn't protect against). Extend it,
+extend-only, via `server.allowCommands`:
+
+```bash
+helm upgrade ami-mcp ./charts/ami-mcp --reuse-values \
+  --set 'server.allowCommands={GetElementInfo}'
+```
+
 ## Monitoring
 
 ami-mcp exposes no `/metrics` endpoint yet, so the chart ships no ServiceMonitor

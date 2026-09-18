@@ -7,6 +7,7 @@ import pytest
 from mcp.types import TextContent
 
 from ami_mcp.auth.factory import EnvBasedClientFactory
+from ami_mcp.policy import DEFAULT_ALLOWED_COMMANDS
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -46,7 +47,8 @@ def mock_ctx(mock_ami_client: MagicMock) -> MagicMock:
     """Return a mock MCPServer Context with a client factory in lifespan context."""
     ctx: MagicMock = MagicMock()
     ctx.request_context.lifespan_context = {
-        "client_factory": EnvBasedClientFactory(client=mock_ami_client)
+        "client_factory": EnvBasedClientFactory(client=mock_ami_client),
+        "allowed_commands": DEFAULT_ALLOWED_COMMANDS,
     }
     return ctx
 

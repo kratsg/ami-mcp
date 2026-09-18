@@ -25,11 +25,12 @@ from ami_mcp.auth.broker import (
 from ami_mcp.auth.factory import EnvBasedClientFactory
 from ami_mcp.auth.shared_secret import SharedSecretVerifier
 from ami_mcp.nomenclature import AMI_QUERY_LANGUAGE, ATLAS_NOMENCLATURE
+from ami_mcp.policy import DEFAULT_ALLOWED_COMMANDS, resolve_allowed_commands
 from ami_mcp.resources import register as register_resources
 from ami_mcp.tools import datasets, execute, hashtags, physics, tags, validate, xsecdb
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
+    from collections.abc import AsyncGenerator, Sequence
 
     from starlette.applications import Starlette
     from starlette.requests import Request
@@ -116,7 +117,7 @@ def _register_all(mcp: MCPServer) -> None:
     register_resources(mcp)
 
 
-def _make_mcp() -> MCPServer:
+def _make_mcp(*, allowed_commands: frozenset[str]) -> MCPServer:
     """Build and return a configured MCPServer instance for stdio."""
 
     @asynccontextmanager
@@ -129,7 +130,7 @@ def _make_mcp() -> MCPServer:
         endpoint = os.environ.get("AMI_ENDPOINT", "atlas-replica")
         factory = EnvBasedClientFactory(client=pyAMI.client.Client(endpoint))
         try:
-            yield {"client_factory": factory}
+            yield {"client_factory": factory, "allowed_commands": allowed_commands}
         finally:
             factory.close()
 
@@ -143,6 +144,7 @@ def _make_shared_secret_app(
     secret: str,
     resource_url: str,
     host: str,
+    allowed_commands: frozenset[str],
 ) -> Starlette:
     """Build the ASGI app for HTTP transport gated by a static bearer.
 
@@ -160,7 +162,7 @@ def _make_shared_secret_app(
         endpoint = os.environ.get("AMI_ENDPOINT", "atlas-replica")
         factory = EnvBasedClientFactory(endpoint=endpoint)
         try:
-            yield {"client_factory": factory}
+            yield {"client_factory": factory, "allowed_commands": allowed_commands}
         finally:
             factory.close()
 
@@ -199,6 +201,7 @@ def _make_broker_app(
     audience: str,
     resource_url: str,
     host: str,
+    allowed_commands: frozenset[str],
 ) -> Starlette:
     """Build the ASGI app for HTTP transport behind the AF credential broker.
 
@@ -214,7 +217,7 @@ def _make_broker_app(
         endpoint = os.environ.get("AMI_ENDPOINT", "atlas-replica")
         factory = BrokerProxyClientFactory(proxy_client, endpoint=endpoint)
         try:
-            yield {"client_factory": factory}
+            yield {"client_factory": factory, "allowed_commands": allowed_commands}
         finally:
             factory.close()
 
@@ -255,6 +258,7 @@ def serve(
     audience: str = "ami",
     forwarded_allow_ips: str = "127.0.0.1",
     log_level: str = "info",
+    allow_commands: Sequence[str] | None = None,
 ) -> None:
     """Start the MCP server over the selected transport."""
     if shared_secret and transport == "stdio":
@@ -264,9 +268,16 @@ def serve(
         )
         sys.exit(1)
 
+    allowed_commands = resolve_allowed_commands(allow_commands)
+    if extra := allowed_commands - DEFAULT_ALLOWED_COMMANDS:
+        sys.stderr.write(
+            "[ami-mcp] NOTICE: ami_execute command allowlist extended with "
+            f"{', '.join(sorted(extra))}.\n"
+        )
+
     if transport == "stdio":
         _preflight_check()
-        _make_mcp().run(transport="stdio")
+        _make_mcp(allowed_commands=allowed_commands).run(transport="stdio")
         return
 
     if auth == "broker":
@@ -292,6 +303,7 @@ def serve(
             audience=audience,
             resource_url=resource_url or f"http://{host}:{port}",
             host=host,
+            allowed_commands=allowed_commands,
         )
     else:
         # HTTP transport, shared-secret mode.
@@ -312,6 +324,7 @@ def serve(
             secret=shared_secret,
             resource_url=resource_url or f"http://{host}:{port}",
             host=host,
+            allowed_commands=allowed_commands,
         )
 
     # HTTP transport only: stdio uses stdout for the MCP protocol and gets no

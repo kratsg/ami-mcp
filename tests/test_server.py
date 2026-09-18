@@ -13,6 +13,7 @@ from mcp.server.mcpserver import MCPServer
 from starlette.testclient import TestClient
 
 from ami_mcp.auth.factory import EnvBasedClientFactory
+from ami_mcp.policy import DEFAULT_ALLOWED_COMMANDS
 from ami_mcp.server import _configure_logging, _preflight_check, _register_all
 
 if TYPE_CHECKING:
@@ -175,7 +176,10 @@ class TestStdioAppOverTheWire:
     def app(self, mock_ami_client: MagicMock) -> Any:
         @asynccontextmanager
         async def _lifespan(_server: MCPServer) -> AsyncGenerator[dict[str, Any], None]:
-            yield {"client_factory": EnvBasedClientFactory(client=mock_ami_client)}
+            yield {
+                "client_factory": EnvBasedClientFactory(client=mock_ami_client),
+                "allowed_commands": DEFAULT_ALLOWED_COMMANDS,
+            }
 
         mcp = MCPServer("test", lifespan=_lifespan)
         _register_all(mcp)
@@ -214,7 +218,11 @@ class TestStdioAppOverTheWire:
                 "method": "tools/call",
                 "params": {
                     "name": "ami_execute",
-                    "arguments": {"command": "SomeQuery"},
+                    "arguments": {
+                        "command": (
+                            "SearchQuery -catalog=mc23_001:production -entity=HASHTAGS"
+                        )
+                    },
                 },
             },
             headers=headers,
@@ -225,7 +233,9 @@ class TestStdioAppOverTheWire:
         assert result["content"][0]["type"] == "text"
         assert "WeakBoson" in result["content"][0]["text"]
         structured = result["structuredContent"]
-        assert structured["command"] == "SomeQuery"
+        assert structured["command"] == (
+            "SearchQuery -catalog=mc23_001:production -entity=HASHTAGS"
+        )
         assert structured["total"] == 1
 
     def test_tools_call_error_sets_is_error(
@@ -250,3 +260,27 @@ class TestStdioAppOverTheWire:
         result = resp.json()["result"]
         assert result["isError"] is True
         assert "structuredContent" not in result or result["structuredContent"] is None
+
+    def test_tools_call_rejects_a_non_allowlisted_command_verb(
+        self, client: TestClient
+    ) -> None:
+        """The only end-to-end proof a rejection serializes correctly through convert_result."""
+        headers = _initialize_session(client)
+        resp = client.post(
+            "/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 5,
+                "method": "tools/call",
+                "params": {
+                    "name": "ami_execute",
+                    "arguments": {"command": "GetElementInfo -x=1"},
+                },
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        result = resp.json()["result"]
+        assert result["isError"] is True
+        assert "structuredContent" not in result or result["structuredContent"] is None
+        assert "GetElementInfo" in result["content"][0]["text"]
