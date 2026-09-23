@@ -178,7 +178,7 @@ and query the external ATLAS AMI service or a local cross-section database
 | Tool                   | Description                                                    | Read/write |
 | ---------------------- | -------------------------------------------------------------- | ---------- |
 | `ami_execute`          | Execute any AMI command string (primary power tool)            | read-only  |
-| `ami_get_dataset_info` | Get metadata for a dataset (nFiles, nEvents, status, etc.)     | read-only  |
+| `ami_get_dataset_info` | Get metadata for a dataset (nFiles, totalEvents, status, etc.) | read-only  |
 | `ami_get_dataset_prov` | Get provenance chain with lineage summary; filter by data type | read-only  |
 | `ami_list_datasets`    | Search for datasets by name pattern (supports `%` wildcards)   | read-only  |
 

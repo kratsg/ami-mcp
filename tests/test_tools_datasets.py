@@ -78,8 +78,9 @@ _DATASET_ROWS = [
         [
             ("logicalDatasetName", "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351"),
             ("nFiles", "42"),
-            ("nEvents", "10000"),
+            ("totalEvents", "10000"),
             ("amiStatus", "VALID"),
+            ("productionStep", "evgen"),
         ]
     )
 ]
@@ -109,6 +110,30 @@ class TestAmiGetDatasetInfo:
         assert result.structured_content is not None
         assert result.structured_content["found"] is True
         assert result.structured_content["fields"]["amiStatus"] == "VALID"
+
+    async def test_total_events_and_production_step_survive_the_field_filter(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        """totalEvents/productionStep are AMI's real dataset field names --
+        confirm _DATASET_INFO_FIELDS keeps them rather than silently dropping
+        them (as the old nEvents/prodStep names did, since AMI never returns
+        rows keyed by those names)."""
+        result_mock = _make_result_mock(_DATASET_ROWS)
+        with patch(
+            "ami_mcp.tools.datasets.run_ami_command",
+            new=AsyncMock(return_value=result_mock),
+        ):
+            fn = registered_tools["ami_get_dataset_info"]
+            result = await fn(
+                dataset="mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351", ctx=mock_ctx
+            )
+
+        assert result.structured_content is not None
+        fields = result.structured_content["fields"]
+        assert fields["totalEvents"] == "10000"
+        assert fields["productionStep"] == "evgen"
 
     async def test_no_results(
         self,
