@@ -14,10 +14,16 @@ from ami_mcp.tools._helpers import (
     data_type_to_prod_step,
     format_ami_result,
     format_error,
+    is_frequency_limited,
     is_transient,
     rows_to_dicts,
     run_ami_command,
     scope_to_catalog,
+)
+
+_FREQUENCY_MESSAGE = (
+    "pyAMI exception: Max command frequency reached for this user/machine. "
+    "Please optimize your script or use cache..."
 )
 
 
@@ -119,6 +125,22 @@ class TestFormatError:
         result = format_error(ValueError("bad"), hints=["Try again."])
         assert "transient" not in result.content[0].text.lower()  # type: ignore[union-attr]
 
+    def test_frequency_limited_error_gets_rate_limit_hint(self) -> None:
+        result = format_error(
+            Exception(_FREQUENCY_MESSAGE),
+            hints=["Read the ami://query-language resource for command syntax."],
+        )
+        text = result.content[0].text  # type: ignore[union-attr]
+        assert "rate" in text.lower()
+
+    def test_frequency_limited_error_replaces_callers_hints(self) -> None:
+        result = format_error(
+            Exception(_FREQUENCY_MESSAGE),
+            hints=["Read the ami://query-language resource for command syntax."],
+        )
+        text = result.content[0].text  # type: ignore[union-attr]
+        assert "query-language" not in text
+
 
 class TestRowsToDicts:
     def test_ordered_dict_rows_pass_through_as_plain_dicts(self) -> None:
@@ -212,6 +234,28 @@ class TestIsTransient:
 
     def test_matching_is_case_insensitive(self) -> None:
         assert is_transient(Exception("CLOSED CONNECTION")) is True
+
+    def test_frequency_limit_message_is_not_transient(self) -> None:
+        assert is_transient(Exception(_FREQUENCY_MESSAGE)) is False
+
+
+class TestIsFrequencyLimited:
+    def test_frequency_limit_message(self) -> None:
+        assert is_frequency_limited(Exception(_FREQUENCY_MESSAGE)) is True
+
+    def test_matching_is_case_insensitive(self) -> None:
+        assert is_frequency_limited(Exception("MAX COMMAND FREQUENCY REACHED")) is True
+
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "pyAMI exception: Closed Connection",
+            "pyAMI exception: unknown command `Bogus`",
+            "Connection reset by peer",
+        ],
+    )
+    def test_other_messages_are_not_frequency_limited(self, message: str) -> None:
+        assert is_frequency_limited(Exception(message)) is False
 
 
 class _FakeClient:
@@ -307,3 +351,30 @@ class TestRunAmiCommandRetry:
                 _make_ctx(factory), "SearchQuery -x=1", attempts=1, retry_delay=0
             )
         assert factory.get_client_calls == 1
+
+    async def test_frequency_limit_error_is_never_retried(self) -> None:
+        client = _FakeClient(failures=[Exception(_FREQUENCY_MESSAGE)])
+        factory = _FakeFactory(client)
+        with pytest.raises(Exception, match="Max command frequency reached"):
+            await run_ami_command(_make_ctx(factory), "SearchQuery -x=1", retry_delay=0)
+        assert client.execute_calls == 1
+        assert factory.get_client_calls == 1
+
+    async def test_transient_then_frequency_limit_surfaces_frequency_error(
+        self,
+    ) -> None:
+        # The transient Closed Connection is retried once (per #27); if that
+        # retry itself lands on AMI's frequency throttle, the frequency error
+        # must surface as-is -- not be retried again, and not be reported as
+        # a generic transient failure.
+        client = _FakeClient(
+            failures=[
+                Exception("pyAMI exception: Closed Connection"),
+                Exception(_FREQUENCY_MESSAGE),
+            ],
+        )
+        factory = _FakeFactory(client)
+        with pytest.raises(Exception, match="Max command frequency reached"):
+            await run_ami_command(_make_ctx(factory), "SearchQuery -x=1", retry_delay=0)
+        assert client.execute_calls == 2
+        assert factory.get_client_calls == 2
