@@ -59,6 +59,25 @@ def is_transient(exc: Exception) -> bool:
     return any(pattern in message for pattern in _TRANSIENT_PATTERNS)
 
 
+# AMI's own throttle response ("pyAMI exception: Max command frequency
+# reached for this user/machine. Please optimize your script or use
+# cache..."). Unlike _TRANSIENT_PATTERNS, this is a policy decision by AMI
+# itself, not a transport hiccup: the caller is already over its command
+# budget, so retrying only spends more of that same budget while AMI is
+# actively refusing requests. Matched case-insensitively against str(exc),
+# same as is_transient.
+_FREQUENCY_LIMIT_PATTERN = "max command frequency reached"
+
+
+def is_frequency_limited(exc: Exception) -> bool:
+    """Return True if *exc* is AMI's command-frequency throttle response.
+
+    Distinct from ``is_transient``: this must never be retried (see
+    ``_FREQUENCY_LIMIT_PATTERN``).
+    """
+    return _FREQUENCY_LIMIT_PATTERN in str(exc).lower()
+
+
 def format_ami_result(rows: list[Any], max_rows: int = 100) -> str:
     """Format a list of AMI result rows as LLM-friendly markdown.
 
@@ -123,6 +142,13 @@ _TRANSIENT_HINT = (
     "retried internally. Try again."
 )
 
+_FREQUENCY_LIMIT_HINT = (
+    "AMI rate-limited this request (command-frequency limit reached). Back "
+    "off for a few tens of seconds, issue AMI queries sequentially rather "
+    "than in parallel, and prefer batch lookups over many single-dataset "
+    "calls."
+)
+
 
 def format_error(
     exc: Exception,
@@ -135,7 +161,13 @@ def format_error(
     payload (mcp SDK's ``convert_result`` only validates ``structured_content``
     against the tool's output model when ``is_error`` is false).
 
-    When *exc* looks like a transient pyAMI connection error (see
+    When *exc* is AMI's command-frequency throttle (see
+    ``is_frequency_limited``), the caller's own hints are replaced entirely by
+    ``_FREQUENCY_LIMIT_HINT`` -- a hint like "read the query-language
+    resource" is not just unhelpful here, it's actively misleading about what
+    went wrong.
+
+    Otherwise, when *exc* looks like a transient pyAMI connection error (see
     ``is_transient``), a hint saying so is prepended ahead of the caller's own
     hints -- ``run_ami_command`` already retried it once, so this is the point
     where that failure surfaces and the one useful piece of advice ("try
@@ -151,9 +183,12 @@ def format_error(
         A ``CallToolResult`` with ``is_error=True`` and the same
         markdown-formatted error prose this helper has always produced.
     """
-    all_hints = list(hints) if hints else []
-    if is_transient(exc):
-        all_hints.insert(0, _TRANSIENT_HINT)
+    if is_frequency_limited(exc):
+        all_hints = [_FREQUENCY_LIMIT_HINT]
+    else:
+        all_hints = list(hints) if hints else []
+        if is_transient(exc):
+            all_hints.insert(0, _TRANSIENT_HINT)
     lines = [f"**Error**: {exc}"]
     if context:
         lines.append(f"\n{context}")
