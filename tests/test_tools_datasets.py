@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from ami_mcp.tools.datasets import register
+from ami_mcp.tools.datasets import _DATASET_INFO_FIELDS, register
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -34,7 +34,12 @@ def registered_tools(
 class TestDatasetsToolRegistration:
     @pytest.mark.parametrize(
         "name",
-        ["ami_get_dataset_info", "ami_get_dataset_prov", "ami_list_datasets"],
+        [
+            "ami_get_dataset_info",
+            "ami_get_dataset_prov",
+            "ami_list_datasets",
+            "ami_get_datasets_info",
+        ],
     )
     def test_declares_read_only_annotations(
         self, registered_tool_objs: dict[str, Any], name: str
@@ -46,12 +51,25 @@ class TestDatasetsToolRegistration:
 
     @pytest.mark.parametrize(
         "name",
-        ["ami_get_dataset_info", "ami_get_dataset_prov", "ami_list_datasets"],
+        [
+            "ami_get_dataset_info",
+            "ami_get_dataset_prov",
+            "ami_list_datasets",
+            "ami_get_datasets_info",
+        ],
     )
     def test_publishes_an_output_schema(
         self, registered_tool_objs: dict[str, Any], name: str
     ) -> None:
         assert registered_tool_objs[name].output_schema is not None
+
+    def test_single_dataset_tool_description_steers_to_batch_tool(
+        self, registered_tool_objs: dict[str, Any]
+    ) -> None:
+        assert (
+            "ami_get_datasets_info"
+            in registered_tool_objs["ami_get_dataset_info"].description
+        )
 
 
 def _make_result_mock(
@@ -717,3 +735,277 @@ class TestAmiListDatasetsCatalogSelection:
         assert result.structured_content is not None
         assert result.structured_content["catalog"] == "mc20_001:production"
         assert result.structured_content["total"] == 0
+
+
+def _make_catalog_router(
+    catalog_rows: dict[str, list[Any]], executed_commands: list[str]
+) -> Callable[..., Any]:
+    """Return a ``run_ami_command`` stand-in that routes by the command's ``-catalog=``.
+
+    Records every issued command (so a test can assert exactly how many AMI
+    commands were run, and against which catalogs) and returns the rows
+    configured for that catalog, mimicking a per-catalog SearchQuery result.
+    """
+
+    async def _router(_ctx: Any, command: str, **_kwargs: Any) -> Any:
+        executed_commands.append(command)
+        catalog = command.split("-catalog=", 1)[1].split(" ", 1)[0]
+        return _make_result_mock(catalog_rows.get(catalog, []))
+
+    return _router
+
+
+class TestAmiGetDatasetsInfo:
+    async def test_single_catalog_all_found_issues_one_command(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        ds1 = "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351"
+        ds2 = "mc20_13TeV.700321.Sh_2211_Zmumu.evgen.EVNT.e8351"
+        # AMI row order is arbitrary (ds2 before ds1 here, opposite of the
+        # input order) and rows carry AMI bookkeeping keys alongside the real
+        # dataset fields -- both must be handled: input order preserved in
+        # the results, bookkeeping keys stripped from `fields`.
+        rows = [
+            OrderedDict(
+                [
+                    ("logicalDatasetName", ds2),
+                    ("nFiles", "20"),
+                    ("totalEvents", "2000"),
+                    ("amiStatus", "VALID"),
+                    ("PROJECT", "mc20_001"),
+                    ("PROCESS", "dataset"),
+                    ("AMIENTITYNAME", "dataset"),
+                    ("AMIELEMENTID", "222"),
+                ]
+            ),
+            OrderedDict(
+                [
+                    ("logicalDatasetName", ds1),
+                    ("nFiles", "10"),
+                    ("totalEvents", "1000"),
+                    ("amiStatus", "VALID"),
+                    ("PROJECT", "mc20_001"),
+                    ("PROCESS", "dataset"),
+                    ("AMIENTITYNAME", "dataset"),
+                    ("AMIELEMENTID", "111"),
+                ]
+            ),
+        ]
+        executed_commands: list[str] = []
+        router = _make_catalog_router({"mc15_001:production": rows}, executed_commands)
+
+        with patch("ami_mcp.tools.datasets.run_ami_command", new=router):
+            fn = registered_tools["ami_get_datasets_info"]
+            result = await fn(datasets=[ds1, ds2], ctx=mock_ctx)
+
+        # Both LDNs share a catalog (mc20_13TeV evgen -> mc15_001:production),
+        # so this must collapse to a single AMI command.
+        assert len(executed_commands) == 1
+        assert "IN (" in executed_commands[0]
+        assert ds1 in executed_commands[0]
+        assert ds2 in executed_commands[0]
+
+        assert result.is_error is not True
+        payload = result.structured_content
+        assert payload is not None
+        assert payload["requested"] == 2
+        assert payload["found"] == 2
+        # Results come back in the order requested, not AMI's row order.
+        assert [r["dataset"] for r in payload["results"]] == [ds1, ds2]
+        assert all(r["found"] for r in payload["results"])
+        assert payload["results"][0]["fields"]["amiStatus"] == "VALID"
+        assert payload["results"][0]["fields"]["totalEvents"] == "1000"
+        assert payload["results"][1]["fields"]["totalEvents"] == "2000"
+        # AMI bookkeeping keys are filtered out the same way
+        # ami_get_dataset_info filters them (allowlist against
+        # _DATASET_INFO_FIELDS), not just the real dataset fields.
+        for entry in payload["results"]:
+            for bookkeeping_key in (
+                "PROJECT",
+                "PROCESS",
+                "AMIENTITYNAME",
+                "AMIELEMENTID",
+            ):
+                assert bookkeeping_key not in entry["fields"]
+
+    async def test_mixed_found_and_not_found(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+        tool_text: Callable[[CallToolResult], str],
+    ) -> None:
+        found_ds = "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351"
+        missing_ds = "mc20_13TeV.999999.NoSuchSample.evgen.EVNT.e0000"
+        rows = [OrderedDict([("logicalDatasetName", found_ds), ("nFiles", "10")])]
+        executed_commands: list[str] = []
+        router = _make_catalog_router({"mc15_001:production": rows}, executed_commands)
+
+        with patch("ami_mcp.tools.datasets.run_ami_command", new=router):
+            fn = registered_tools["ami_get_datasets_info"]
+            result = await fn(datasets=[found_ds, missing_ds], ctx=mock_ctx)
+
+        payload = result.structured_content
+        assert payload is not None
+        assert payload["requested"] == 2
+        assert payload["found"] == 1
+        by_ds = {r["dataset"]: r for r in payload["results"]}
+        assert by_ds[found_ds]["found"] is True
+        assert by_ds[missing_ds]["found"] is False
+        assert by_ds[missing_ds]["error"] is None
+        assert missing_ds in tool_text(result)
+
+    async def test_cross_catalog_grouping_issues_one_command_per_catalog(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        # evgen EVNT -> mc15_001:production; deriv DAOD_PHYS -> mc20_001:production
+        # (see scope_to_catalog()/#28's project+prod-step catalog selection).
+        evgen_ds = "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351"
+        deriv_ds = "mc20_13TeV.700320.Sh_2211_Zee.deriv.DAOD_PHYS.e8351_p5855"
+        rows_by_catalog = {
+            "mc15_001:production": [
+                OrderedDict([("logicalDatasetName", evgen_ds), ("nFiles", "1")])
+            ],
+            "mc20_001:production": [
+                OrderedDict([("logicalDatasetName", deriv_ds), ("nFiles", "2")])
+            ],
+        }
+        executed_commands: list[str] = []
+        router = _make_catalog_router(rows_by_catalog, executed_commands)
+
+        with patch("ami_mcp.tools.datasets.run_ami_command", new=router):
+            fn = registered_tools["ami_get_datasets_info"]
+            result = await fn(datasets=[evgen_ds, deriv_ds], ctx=mock_ctx)
+
+        assert len(executed_commands) == 2
+        catalogs_queried = {
+            cmd.split("-catalog=", 1)[1].split(" ", 1)[0] for cmd in executed_commands
+        }
+        assert catalogs_queried == {"mc15_001:production", "mc20_001:production"}
+        payload = result.structured_content
+        assert payload is not None
+        assert payload["found"] == 2
+        by_ds = {r["dataset"]: r for r in payload["results"]}
+        assert by_ds[evgen_ds]["found"] is True
+        assert by_ds[deriv_ds]["found"] is True
+
+    async def test_cap_exceeded_returns_error_without_querying_ami(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+        tool_text: Callable[[CallToolResult], str],
+    ) -> None:
+        too_many = [f"mc20_13TeV.{i}.Sample.evgen.EVNT.e0000" for i in range(51)]
+        mock_run = AsyncMock()
+
+        with patch("ami_mcp.tools.datasets.run_ami_command", new=mock_run):
+            fn = registered_tools["ami_get_datasets_info"]
+            result = await fn(datasets=too_many, ctx=mock_ctx)
+
+        assert result.is_error is True
+        assert "50" in tool_text(result)
+        assert mock_run.await_count == 0
+
+    async def test_duplicate_input_is_deduped(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        ds = "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351"
+        rows = [OrderedDict([("logicalDatasetName", ds), ("nFiles", "1")])]
+        executed_commands: list[str] = []
+        router = _make_catalog_router({"mc15_001:production": rows}, executed_commands)
+
+        with patch("ami_mcp.tools.datasets.run_ami_command", new=router):
+            fn = registered_tools["ami_get_datasets_info"]
+            result = await fn(datasets=[ds, ds, ds], ctx=mock_ctx)
+
+        assert executed_commands[0].count(ds) == 1
+        payload = result.structured_content
+        assert payload is not None
+        assert payload["requested"] == 1
+        assert len(payload["results"]) == 1
+
+    async def test_malformed_ldn_gets_a_per_dataset_error_without_querying_ami(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+        tool_text: Callable[[CallToolResult], str],
+    ) -> None:
+        bad = "not-a-valid-ldn"
+        mock_run = AsyncMock()
+
+        with patch("ami_mcp.tools.datasets.run_ami_command", new=mock_run):
+            fn = registered_tools["ami_get_datasets_info"]
+            result = await fn(datasets=[bad], ctx=mock_ctx)
+
+        assert mock_run.await_count == 0
+        payload = result.structured_content
+        assert payload is not None
+        assert payload["results"][0]["found"] is False
+        assert payload["results"][0]["error"]
+        assert bad in tool_text(result)
+
+    async def test_catalog_query_failure_is_scoped_to_that_catalogs_datasets(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        evgen_ds = "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351"  # mc15_001
+        deriv_ds = (
+            "mc20_13TeV.700320.Sh_2211_Zee.deriv.DAOD_PHYS.e8351_p5855"  # mc20_001
+        )
+
+        async def _router(_ctx: Any, command: str, **_kwargs: Any) -> Any:
+            if "mc15_001:production" in command:
+                msg = (
+                    "pyAMI exception: Max command frequency reached for this "
+                    "user/machine."
+                )
+                raise RuntimeError(msg)
+            return _make_result_mock(
+                [OrderedDict([("logicalDatasetName", deriv_ds), ("nFiles", "2")])]
+            )
+
+        with patch("ami_mcp.tools.datasets.run_ami_command", new=_router):
+            fn = registered_tools["ami_get_datasets_info"]
+            result = await fn(datasets=[evgen_ds, deriv_ds], ctx=mock_ctx)
+
+        payload = result.structured_content
+        assert payload is not None
+        by_ds = {r["dataset"]: r for r in payload["results"]}
+        assert by_ds[evgen_ds]["found"] is False
+        assert "frequency" in by_ds[evgen_ds]["error"].lower()
+        assert by_ds[deriv_ds]["found"] is True
+        assert by_ds[deriv_ds]["error"] is None
+
+    async def test_select_list_matches_dataset_info_fields(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+    ) -> None:
+        """Regression guard: AMI's SearchQuery silently returns zero rows (no
+        error) when the SELECT list names an unknown field, so a SELECT list
+        that drifts from _DATASET_INFO_FIELDS -- e.g. reintroducing the old
+        nEvents/prodStep/kFactor names -- would fail every lookup in the
+        batch without a single error to point at."""
+        ds = "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351"
+        executed_commands: list[str] = []
+        router = _make_catalog_router({"mc15_001:production": []}, executed_commands)
+
+        with patch("ami_mcp.tools.datasets.run_ami_command", new=router):
+            fn = registered_tools["ami_get_datasets_info"]
+            await fn(datasets=[ds], ctx=mock_ctx)
+
+        assert len(executed_commands) == 1
+        select_clause = (
+            executed_commands[0].split("SELECT ", 1)[1].split(" WHERE", 1)[0]
+        )
+        selected_fields = [f.strip() for f in select_clause.split(",")]
+        assert selected_fields == _DATASET_INFO_FIELDS
+        assert "nEvents" not in selected_fields
+        assert "prodStep" not in selected_fields
+        assert "kFactor" not in selected_fields

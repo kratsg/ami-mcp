@@ -32,7 +32,7 @@ src/ami_mcp/
     ├── __init__.py
     ├── _helpers.py      # format_ami_result(), run_ami_command(), scope_to_catalog()
     ├── execute.py       # ami_execute (general purpose AMI command execution)
-    ├── datasets.py      # ami_get_dataset_info, ami_list_datasets, ami_get_dataset_prov
+    ├── datasets.py      # ami_get_dataset_info, ami_get_datasets_info, ami_list_datasets, ami_get_dataset_prov
     ├── hashtags.py      # ami_search_by_hashtags, ami_get_dataset_hashtags
     ├── physics.py       # ami_get_physics_params
     ├── tags.py          # ami_get_ami_tag
@@ -154,7 +154,7 @@ Key conventions:
   not just for static type checking. Getting this wrong raises
   `InvalidSignature: Unable to evaluate type annotations` the moment the tool is
   registered.
-- All 11 tools are read-only AMI/xsec-DB queries against an external service, so
+- All 12 tools are read-only AMI/xsec-DB queries against an external service, so
   every `ToolAnnotations` today is `read_only_hint=True, open_world_hint=True`.
   `destructive_hint`/`idempotent_hint` stay unset — the spec says they're only
   meaningful when `read_only_hint` is false.

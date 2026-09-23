@@ -36,6 +36,13 @@ _DATASET_INFO_FIELDS = [
     "version",
 ]
 
+#: Maximum number of LDNs ami_get_datasets_info accepts in one call. Chosen to
+#: keep each per-catalog SearchQuery's IN (...) clause -- and the number of
+#: catalogs fanned out to when a batch spans campaigns/prod steps -- small
+#: enough to stay fast; see get-meta-data.py in the maintainer's reference
+#: material for prior art batching AMI IN-clause queries in chunks of 500.
+_MAX_BATCH_DATASETS = 50
+
 
 class AmiDatasetInfoResult(BaseModel):
     """Structured result of ``ami_get_dataset_info``."""
@@ -66,6 +73,40 @@ class AmiListDatasetsResult(BaseModel):
     total: int
 
 
+class AmiDatasetBatchEntry(BaseModel):
+    """One dataset's result within ``ami_get_datasets_info``'s batch."""
+
+    dataset: str
+    found: bool
+    fields: dict[str, str]
+    error: str | None = None
+
+
+class AmiDatasetsInfoResult(BaseModel):
+    """Structured result of ``ami_get_datasets_info``."""
+
+    requested: int
+    found: int
+    results: list[AmiDatasetBatchEntry]
+
+
+def _project_and_data_type(ldn: str) -> tuple[str, str] | None:
+    """Split an LDN into (project, dataType) to pick its AMI catalog.
+
+    LDN format is ``project.datasetNumber.physicsShort.prodStep.dataType.AMITags``
+    for both MC and real data (see ATL-COM-GEN-2007-003), so the project is
+    always the first dot-separated field and dataType the fifth.
+
+    Returns:
+        (project, dataType), or None if *ldn* doesn't have enough
+        dot-separated fields to contain a dataType.
+    """
+    parts = ldn.split(".")
+    if len(parts) < 5:
+        return None
+    return parts[0], parts[4]
+
+
 def register(mcp: MCPServer) -> None:
     """Register dataset info tools."""
 
@@ -85,7 +126,10 @@ def register(mcp: MCPServer) -> None:
 
         Returns key fields: nFiles, totalEvents, totalSize, crossSection, genFiltEff,
         amiStatus, and related metadata registered in AMI for this dataset.
-        Use ami_execute with AMIGetDatasetInfo for all raw fields.
+        Use ami_execute with AMIGetDatasetInfo for all raw fields. Looking up
+        more than one dataset? Use `ami_get_datasets_info` instead -- it
+        collapses N lookups into one AMI command per AMI catalog rather than
+        N separate ones.
 
         Args:
             dataset: Full Logical Dataset Name (LDN), e.g.
@@ -145,6 +189,146 @@ def register(mcp: MCPServer) -> None:
                     "Use `ami_list_datasets` to search by physicsShort pattern.",
                 ],
             )
+
+    @mcp.tool(
+        annotations=ToolAnnotations(
+            title="Get batch dataset info",
+            read_only_hint=True,
+            open_world_hint=True,
+        )
+    )
+    async def ami_get_datasets_info(
+        datasets: list[str],
+        *,
+        ctx: Context[Any, Any],
+    ) -> Annotated[CallToolResult, AmiDatasetsInfoResult]:
+        """Get metadata for multiple ATLAS datasets (LDNs) from AMI in one call.
+
+        Prefer this over calling `ami_get_dataset_info` once per dataset when
+        looking up several LDNs: it issues at most one AMI SearchQuery per AMI
+        catalog the LDNs fall in (often just one, if they share a campaign and
+        production step) instead of one AMI command per dataset. AMI throttles
+        bursts of commands from the same user/machine, so N parallel
+        single-dataset lookups risk hitting that limit; this tool doesn't.
+
+        Returns the same key fields as `ami_get_dataset_info` (nFiles,
+        totalEvents, totalSize, crossSection, genFiltEff, amiStatus, ...) per
+        dataset, or a per-dataset not-found/error entry -- one bad or unknown
+        LDN never fails the whole batch.
+
+        Duplicate LDNs in `datasets` collapse to a single result, in the
+        order of first appearance.
+
+        Args:
+            datasets: Full Logical Dataset Names (LDNs) to look up, at most
+                50 per call.
+        """
+        deduped = list(dict.fromkeys(datasets))
+        if len(deduped) > _MAX_BATCH_DATASETS:
+            return format_error(
+                ValueError(
+                    f"Requested {len(deduped)} datasets, over the "
+                    f"{_MAX_BATCH_DATASETS}-dataset batch limit."
+                ),
+                hints=[
+                    f"Split the request into batches of at most {_MAX_BATCH_DATASETS} datasets."
+                ],
+            )
+
+        entries: dict[str, AmiDatasetBatchEntry] = {}
+        # Group parseable LDNs by AMI catalog (scope_to_catalog(), same
+        # project+prod-step logic ami_get_dataset_info/#28 use); a batch may
+        # span catalogs, so this issues one SearchQuery per catalog rather
+        # than one per LDN. LDNs that don't parse get a per-dataset error
+        # without ever reaching AMI.
+        by_catalog: dict[str, list[str]] = defaultdict(list)
+        for ds in deduped:
+            parsed = _project_and_data_type(ds)
+            if parsed is None:
+                entries[ds] = AmiDatasetBatchEntry(
+                    dataset=ds,
+                    found=False,
+                    fields={},
+                    error=(
+                        "Cannot determine AMI catalog: malformed LDN (expected "
+                        "project.datasetNumber.physicsShort.prodStep.dataType"
+                        "[.tags])"
+                    ),
+                )
+                continue
+            project, data_type = parsed
+            catalog = scope_to_catalog(project, data_type_to_prod_step(data_type))
+            by_catalog[catalog].append(ds)
+
+        for catalog, ldns in by_catalog.items():
+            quoted = ", ".join(f"'{ldn.replace(chr(39), chr(39) * 2)}'" for ldn in ldns)
+            mql = (
+                f"SELECT {', '.join(_DATASET_INFO_FIELDS)} "
+                f"WHERE logicalDatasetName IN ({quoted}) LIMIT 0,{len(ldns)}"
+            )
+            command = f'SearchQuery -catalog={catalog} -entity=dataset -mql="{mql}"'
+            try:
+                result = await run_ami_command(ctx, command)
+                rows = result.get_rows()
+            except Exception as exc:  # noqa: BLE001
+                for ds in ldns:
+                    entries[ds] = AmiDatasetBatchEntry(
+                        dataset=ds, found=False, fields={}, error=str(exc)
+                    )
+                continue
+
+            by_ldn = {row.get("logicalDatasetName"): row for row in rows}
+            for ds in ldns:
+                row = by_ldn.get(ds)
+                if row is None:
+                    entries[ds] = AmiDatasetBatchEntry(
+                        dataset=ds, found=False, fields={}
+                    )
+                else:
+                    filtered = {
+                        k: str(v) for k, v in row.items() if k in _DATASET_INFO_FIELDS
+                    }
+                    entries[ds] = AmiDatasetBatchEntry(
+                        dataset=ds, found=True, fields=filtered
+                    )
+
+        ordered_results = [entries[ds] for ds in deduped]
+        found_count = sum(1 for e in ordered_results if e.found)
+
+        parts: list[str] = []
+        found_rows = [
+            {"logicalDatasetName": e.dataset, **e.fields}
+            for e in ordered_results
+            if e.found
+        ]
+        parts.append(
+            format_ami_result(found_rows) if found_rows else "No datasets found."
+        )
+
+        missing = [e for e in ordered_results if not e.found]
+        if missing:
+            parts.append("## Not found / errors")
+            parts.append(
+                "\n".join(
+                    f"- **{e.dataset}**: {e.error or 'Not found in AMI.'}"
+                    for e in missing
+                )
+            )
+
+        text = append_next_actions(
+            "\n\n".join(parts),
+            [
+                "Use `ami_get_dataset_info` on a single LDN for its full metadata.",
+                "Use `ami_get_dataset_prov` to trace an individual dataset's processing chain.",
+            ],
+        )
+        payload = AmiDatasetsInfoResult(
+            requested=len(deduped), found=found_count, results=ordered_results
+        )
+        return CallToolResult(
+            content=[TextContent(type="text", text=text)],
+            structured_content=payload.model_dump(mode="json"),
+        )
 
     @mcp.tool(
         annotations=ToolAnnotations(
