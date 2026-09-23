@@ -24,15 +24,14 @@ _DATASET_INFO_FIELDS = [
     "datasetNumber",
     "physicsShort",
     "nFiles",
-    "nEvents",
+    "totalEvents",
     "totalSize",
     "crossSection",
     "genFiltEff",
-    "kFactor",
     "amiStatus",
     "prodsysStatus",
     "dataType",
-    "prodStep",
+    "productionStep",
     "projectName",
     "version",
 ]
@@ -84,7 +83,7 @@ def register(mcp: MCPServer) -> None:
     ) -> Annotated[CallToolResult, AmiDatasetInfoResult]:
         """Get metadata for an ATLAS dataset (LDN) from AMI.
 
-        Returns key fields: nFiles, nEvents, totalSize, crossSection, genFiltEff,
+        Returns key fields: nFiles, totalEvents, totalSize, crossSection, genFiltEff,
         amiStatus, and related metadata registered in AMI for this dataset.
         Use ami_execute with AMIGetDatasetInfo for all raw fields.
 
@@ -368,7 +367,7 @@ def register(mcp: MCPServer) -> None:
             patterns: physicsShort pattern with % wildcards, e.g. "%Zee%".
             project: ATLAS project/campaign (e.g. "mc20_13TeV", "mc23_13p6TeV").
                 Required to select the correct AMI catalog.
-            fields: Comma-separated extra fields to return (e.g. "nFiles,nEvents").
+            fields: Comma-separated extra fields to return (e.g. "nFiles,totalEvents").
             data_type: Filter by data type (e.g. "EVNT", "DAOD_PHYS"). Also
                 selects the catalog searched -- see above.
             ami_status: Filter by amiStatus (default "VALID"). Pass None to

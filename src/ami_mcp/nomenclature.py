@@ -171,7 +171,6 @@ Field reference for 'dataset' entity:
   amiStatus             VALID, INVALID, etc.
   crossSection          cross-section (nb)
   genFiltEff            filter efficiency
-  kFactor               k-factor
   prodsysStatus         production status
 
   Fully-qualified form (needed when joining):
@@ -240,7 +239,7 @@ DATASET INFO COMMANDS
 
 AMIGetDatasetInfo — get full dataset metadata
   Required: -logicalDatasetName="<ldn>"
-  Returns: nFiles, nEvents, totalSize, crossSection, genFiltEff, etc.
+  Returns: nFiles, totalEvents, totalSize, crossSection, genFiltEff, etc.
 
 GetPhysicsParamsForDataset — get physics parameters
   Required: -logicalDatasetName="<ldn>"
