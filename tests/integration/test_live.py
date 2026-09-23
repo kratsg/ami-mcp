@@ -90,6 +90,27 @@ def test_ami_list_datasets_finds_mc20_derivations_in_mc20_catalog() -> None:
 
 
 @pytest.mark.slow
+def test_ami_get_datasets_info_in_clause_finds_one_and_skips_missing() -> None:
+    """Confirms ami_get_datasets_info's core query: an ``IN (...)`` clause on
+    logicalDatasetName returns only the datasets AMI actually has, without
+    erroring on the ones it doesn't -- this is what lets a batch of LDNs
+    collapse to one AMI command per catalog instead of one per LDN.
+    """
+    client = pyAMI.client.Client("atlas-replica")
+    known = "mc20_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.evgen.EVNT.e8351"
+    missing = "mc20_13TeV.999999.NoSuchSample.evgen.EVNT.e0000"
+    mql = (
+        "SELECT logicalDatasetName, nFiles, totalEvents, amiStatus"
+        f" WHERE logicalDatasetName IN ('{known}', '{missing}') LIMIT 0,5"
+    )
+    cmd = f'SearchQuery -catalog=mc15_001:production -entity=dataset -mql="{mql}"'
+    result = client.execute(cmd, format="dom_object")
+    rows = result.get_rows()
+    assert len(rows) == 1
+    assert rows[0]["logicalDatasetName"] == known
+
+
+@pytest.mark.slow
 def test_ami_list_datasets_finds_mc20_evgen_in_mc15_catalog() -> None:
     """Confirms the mc15 evgen-catalog branch: mc20_13TeV EVNT lives in mc15_001.
 

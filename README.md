@@ -175,12 +175,13 @@ and query the external ATLAS AMI service or a local cross-section database
 
 ### AMI queries
 
-| Tool                   | Description                                                    | Read/write |
-| ---------------------- | -------------------------------------------------------------- | ---------- |
-| `ami_execute`          | Execute any AMI command string (primary power tool)            | read-only  |
-| `ami_get_dataset_info` | Get metadata for a dataset (nFiles, totalEvents, status, etc.) | read-only  |
-| `ami_get_dataset_prov` | Get provenance chain with lineage summary; filter by data type | read-only  |
-| `ami_list_datasets`    | Search for datasets by name pattern (supports `%` wildcards)   | read-only  |
+| Tool                    | Description                                                             | Read/write |
+| ----------------------- | ----------------------------------------------------------------------- | ---------- |
+| `ami_execute`           | Execute any AMI command string (primary power tool)                     | read-only  |
+| `ami_get_dataset_info`  | Get metadata for a dataset (nFiles, totalEvents, status, etc.)          | read-only  |
+| `ami_get_datasets_info` | Batch metadata lookup for multiple datasets (one AMI query per catalog) | read-only  |
+| `ami_get_dataset_prov`  | Get provenance chain with lineage summary; filter by data type          | read-only  |
+| `ami_list_datasets`     | Search for datasets by name pattern (supports `%` wildcards)            | read-only  |
 
 ### PMG hashtags
 

@@ -140,13 +140,13 @@ class TestToolRegistrationDrift:
 
         This is the one test that would catch a future tool being added (or
         an existing one being refactored) without following the
-        Annotated[CallToolResult, Model] + ToolAnnotations pattern all 11
+        Annotated[CallToolResult, Model] + ToolAnnotations pattern all 12
         tools use today -- see CLAUDE.md's "Tool registration pattern" section.
         """
         mcp = MCPServer("test")
         _register_all(mcp)
         tools = list(mcp._tool_manager.list_tools())
-        assert len(tools) == 11
+        assert len(tools) == 12
         for tool in tools:
             assert tool.annotations is not None, tool.name
             assert tool.annotations.read_only_hint is not None, tool.name

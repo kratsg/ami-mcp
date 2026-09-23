@@ -45,7 +45,10 @@ def register(mcp: MCPServer) -> None:
         Use this when no specialized tool covers your query. Read the
         ami://query-language resource to learn how to construct command strings.
         The LLM formulates the command string; this tool executes it and returns
-        formatted results.
+        formatted results. Looking up several datasets? Use
+        `ami_get_datasets_info` instead of issuing one AMIGetDatasetInfo call
+        per dataset -- AMI throttles bursts of commands from the same
+        user/machine.
 
         Common command patterns:
           SearchQuery -catalog=mc23_001:production -entity=HASHTAGS

@@ -44,6 +44,9 @@ class TestAmiExecuteRegistration:
         assert registered_tool.output_schema is not None
         assert "rows" in registered_tool.output_schema["properties"]
 
+    def test_description_steers_to_batch_tool(self, registered_tool: Any) -> None:
+        assert "ami_get_datasets_info" in registered_tool.description
+
 
 class TestAmiExecute:
     async def test_returns_formatted_results(
