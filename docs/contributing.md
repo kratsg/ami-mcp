@@ -100,10 +100,9 @@ Key conventions:
   exceptions and never as bare `f"Error: {exc}"` strings
 - Use `append_next_actions(output, [...])` to suggest follow-up tool calls after
   a successful result
-- **Do NOT import `pyAMI_atlas.api` in tool modules** — `pyAMI/utils.py` has an
-  invalid escape sequence that becomes a SyntaxError under
-  `filterwarnings=["error"]` on Python 3.11+. Use `client.execute(cmd)`
-  directly.
+- **Do NOT call `pyAMI_atlas.api` helpers in tool modules** — build the AMI
+  command string and send it through `run_ami_command` so every AMI call shares
+  the same client scoping, retry, and frequency-limit handling.
 - All `client.execute()` calls go through `run_ami_sync()` (wraps blocking pyAMI
   HTTP calls in `asyncio.to_thread()`)
 

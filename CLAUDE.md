@@ -175,10 +175,9 @@ Key conventions:
   proxy that is deleted afterwards) and runs pyAMI's synchronous (httplib)
   `client.execute` via `asyncio.to_thread()` so the MCP event loop stays
   responsive
-- **Do NOT import `pyAMI_atlas.api` in tool modules.** `pyAMI/utils.py` has an
-  invalid escape sequence (`'\W+'`) that becomes a SyntaxError under
-  `filterwarnings=["error"]` on Python 3.11+. Use `client.execute(cmd_string)`
-  directly instead.
+- **Do NOT call `pyAMI_atlas.api` helpers in tool modules.** Build the AMI
+  command string and send it through `run_ami_command` so every AMI call shares
+  the same client scoping, retry, and frequency-limit handling.
 
 Then wire it in `server.py`:
 
