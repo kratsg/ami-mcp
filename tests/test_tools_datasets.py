@@ -1071,6 +1071,25 @@ class TestAmiListDatasetsFieldValidation:
         assert result.is_error is not True
         assert len(self._search_queries(router)) == 1
 
+    async def test_field_names_are_sent_in_the_schemas_casing(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+        router: MagicMock,
+    ) -> None:
+        # AMI echoes the caller's casing in result keys, so normalizing keeps
+        # row keys canonical whatever casing the caller used.
+        result = await registered_tools["ami_list_datasets"](
+            patterns="%Zee%",
+            project="mc23_13p6TeV",
+            fields="TOTALEVENTS,nfiles",
+            ctx=mock_ctx,
+        )
+        assert result.is_error is not True
+        (query,) = self._search_queries(router)
+        assert "totalEvents, nFiles" in query
+        assert "TOTALEVENTS" not in query
+
     async def test_no_fields_means_no_schema_fetch(
         self,
         registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],

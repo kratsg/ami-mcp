@@ -21,6 +21,7 @@ from ami_mcp.tools._helpers import (
     scope_to_catalog,
 )
 from ami_mcp.tools._schema import (
+    canonicalize_fields,
     find_unknown_fields,
     get_entity_fields,
     split_plain_fields,
@@ -597,7 +598,6 @@ def register(mcp: MCPServer) -> None:
                                 for name, near in unknown.items()
                                 if near
                             ),
-                            "Field names are case-sensitive.",
                             "Call `ami_list_fields` to see every valid field name.",
                         ],
                     )
@@ -613,7 +613,12 @@ def register(mcp: MCPServer) -> None:
 
         select_fields = "logicalDatasetName, datasetNumber, physicsShort, amiStatus"
         if fields:
-            select_fields += ", " + fields
+            requested = (
+                [t.strip() for t in fields.split(",") if t.strip()]
+                if fields_unvalidated
+                else canonicalize_fields(fields, schema)
+            )
+            select_fields += ", " + ", ".join(requested)
 
         mql = f"SELECT {select_fields} WHERE {' AND '.join(conditions)} LIMIT 0,{limit}"
         command = f'SearchQuery -catalog={catalog} -entity=dataset -mql="{mql}"'

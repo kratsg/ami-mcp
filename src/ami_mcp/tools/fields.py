@@ -55,9 +55,9 @@ def register(mcp: MCPServer) -> None:
 
         These are the valid names for the `fields` argument of
         `ami_list_datasets` and for SELECT/WHERE clauses in `ami_execute`
-        SearchQuery MQL. Names are case-sensitive (e.g. `datasetNumber`, not
-        `dataset_number`). AMI silently returns zero rows for an unknown field
-        rather than an error.
+        SearchQuery MQL. Names are listed in AMI's canonical casing (e.g.
+        `datasetNumber`; `dataset_number` is not a field). AMI silently returns
+        zero rows for an unknown field rather than an error.
 
         The catalog is chosen from project and data_type exactly as in
         `ami_list_datasets`.

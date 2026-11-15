@@ -11,6 +11,7 @@ import pytest
 from ami_mcp.tools._schema import (
     FieldInfo,
     SchemaCache,
+    canonicalize_fields,
     find_unknown_fields,
     parse_entity_fields,
 )
@@ -119,11 +120,20 @@ class TestFindUnknownFields:
         self, fields: list[FieldInfo]
     ) -> None:
         unknown = find_unknown_fields(["dataset_number"], fields, "dataset")
-        assert unknown == {"dataset_number": ["datasetNumber"]}
+        assert unknown["dataset_number"][0] == "datasetNumber"
 
-    def test_wrong_case_suggests_the_right_case(self, fields: list[FieldInfo]) -> None:
-        unknown = find_unknown_fields(["ntotalevents", "NFILES"], fields, "dataset")
-        assert unknown["NFILES"] == ["nFiles"]
+    @pytest.mark.parametrize("name", ["datasetnumber", "DATASETNUMBER", "nfiles"])
+    def test_names_are_matched_case_insensitively(
+        self, fields: list[FieldInfo], name: str
+    ) -> None:
+        # AMI accepts any casing of a field name (verified live, #40).
+        assert find_unknown_fields([name], fields, "dataset") == {}
+
+    def test_snake_case_is_still_rejected_in_any_case(
+        self, fields: list[FieldInfo]
+    ) -> None:
+        unknown = find_unknown_fields(["Dataset_Number"], fields, "dataset")
+        assert unknown["Dataset_Number"][0] == "datasetNumber"
 
     def test_typo_gets_close_match(self, fields: list[FieldInfo]) -> None:
         unknown = find_unknown_fields(["totalEvent"], fields, "dataset")
@@ -138,3 +148,21 @@ class TestFindUnknownFields:
         assert find_unknown_fields(["dataset_number"], files, "files") == {
             "dataset_number": []
         }
+
+
+class TestCanonicalizeFields:
+    @pytest.fixture
+    def fields(self, entity_info_result: Any) -> list[FieldInfo]:
+        return parse_entity_fields(entity_info_result)
+
+    def test_rewrites_names_to_the_schema_casing(self, fields: list[FieldInfo]) -> None:
+        assert canonicalize_fields("datasetnumber, NFILES", fields) == [
+            "datasetNumber",
+            "nFiles",
+        ]
+
+    def test_leaves_non_plain_terms_untouched(self, fields: list[FieldInfo]) -> None:
+        assert canonicalize_fields("COUNT(nfiles), `x`.`y`", fields) == [
+            "COUNT(nfiles)",
+            "`x`.`y`",
+        ]

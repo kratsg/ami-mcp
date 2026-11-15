@@ -135,33 +135,53 @@ def find_unknown_fields(
 ) -> dict[str, list[str]]:
     """Return each requested name AMI does not know, with suggested real names.
 
-    Names are matched case-sensitively, as the schema spells them. Suggestions
-    come from a case-insensitive exact match, the pyAMI-atlas snake_case alias
-    table (dataset entity only), then difflib close matches against the real
-    names and aliases.
+    AMI matches field names case-insensitively, so a name is known if it
+    equals any schema field ignoring case. Only names matching nothing get
+    suggestions, from the pyAMI-atlas snake_case alias table (dataset entity
+    only) and then difflib close matches against the real names and aliases.
     """
-    names = [f.name for f in fields]
-    known = set(names)
     aliases = _dataset_aliases() if entity == "dataset" else {}
-    by_folded = {name.casefold(): name for name in names}
-    candidates = {**aliases, **{name: name for name in names}}
+    # Keyed by casefolded name; values are the real AMI spelling.
+    candidates = {alias.casefold(): ami for alias, ami in aliases.items()}
+    candidates |= {f.name.casefold(): f.name for f in fields}
+    known = {f.name.casefold() for f in fields}
 
     unknown: dict[str, list[str]] = {}
     for name in requested:
-        if name in known:
+        folded = name.casefold()
+        if folded in known:
             continue
         suggestions: list[str] = []
-        for exact in (by_folded.get(name.casefold()), aliases.get(name)):
-            if exact and exact not in suggestions:
-                suggestions.append(exact)
-        for match in difflib.get_close_matches(
-            name, list(candidates), n=_CLOSE_MATCH_COUNT, cutoff=_CLOSE_MATCH_CUTOFF
-        ):
-            real = candidates[match]
-            if real not in suggestions:
+        for match in [
+            folded,
+            *difflib.get_close_matches(
+                folded,
+                list(candidates),
+                n=_CLOSE_MATCH_COUNT,
+                cutoff=_CLOSE_MATCH_CUTOFF,
+            ),
+        ]:
+            real = candidates.get(match)
+            if real and real not in suggestions:
                 suggestions.append(real)
         unknown[name] = suggestions[:_CLOSE_MATCH_COUNT]
     return unknown
+
+
+def canonicalize_fields(fields: str, schema: Sequence[FieldInfo]) -> list[str]:
+    """Split a ``fields`` argument, rewriting bare names to the schema's casing.
+
+    AMI echoes the caller's casing in result row keys, so rewriting keeps the
+    keys canonical (``datasetNumber``) whatever casing the caller typed.
+    Non-bare terms (functions, backticked identifiers) are kept as written.
+    """
+    canonical = {f.name.casefold(): f.name for f in schema}
+    terms = [term.strip() for term in fields.split(",")]
+    return [
+        canonical.get(term.casefold(), term) if _PLAIN_FIELD.match(term) else term
+        for term in terms
+        if term
+    ]
 
 
 def split_plain_fields(fields: str) -> list[str]:
