@@ -77,8 +77,10 @@ def test_ami_get_physics_params_known_dataset() -> None:
     cmd = f'GetPhysicsParamsForDataset -logicalDatasetName="{ldn}"'
     result = client.execute(cmd, format="dom_object")
     rows = result.get_rows()
-    assert len(rows) > 0
-    assert "crossSection" in rows[0]
+    # One row per parameter: the parameter's name is in paramName, not a key.
+    cross_sections = [r for r in rows if r["paramName"] == "crossSection"]
+    assert cross_sections
+    assert float(cross_sections[0]["paramValue"]) > 0
 
 
 @pytest.mark.slow
