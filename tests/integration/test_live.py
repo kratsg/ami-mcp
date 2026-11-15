@@ -6,10 +6,16 @@ Run with: pytest tests/integration/ --runslow -v
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pyAMI.client
 import pyAMI_atlas.api  # noqa: F401
 import pytest
+from mcp.server.mcpserver import MCPServer
 from pyAMI_atlas import api
+
+from ami_mcp.auth.factory import EnvBasedClientFactory
+from ami_mcp.tools import datasets, fields
 
 
 @pytest.mark.slow
@@ -128,3 +134,47 @@ def test_ami_list_datasets_finds_mc20_evgen_in_mc15_catalog() -> None:
     result = client.execute(cmd, format="dom_object")
     rows = result.get_rows()
     assert len(rows) > 0
+
+
+class _LiveCtx:
+    """Minimal request context around a real pyAMI client (no mocks)."""
+
+    def __init__(self) -> None:
+        client = pyAMI.client.Client("atlas-replica")
+        self.request_context = SimpleNamespace(
+            lifespan_context={"client_factory": EnvBasedClientFactory(client=client)}
+        )
+
+
+@pytest.mark.slow
+async def test_ami_list_fields_includes_dataset_number() -> None:
+    """ami_list_fields reads the live mc23 dataset schema (#40)."""
+    mcp = MCPServer("live")
+    fields.register(mcp)
+    tool = {t.name: t for t in mcp._tool_manager.list_tools()}["ami_list_fields"]
+    result = await tool.fn(
+        project="mc23_13p6TeV", data_type="DAOD_PHYSLITE", ctx=_LiveCtx()
+    )
+    assert result.is_error is not True
+    names = {f["name"] for f in result.structured_content["fields"]}
+    assert "datasetNumber" in names
+
+
+@pytest.mark.slow
+async def test_ami_list_datasets_unknown_field_errors_with_suggestion() -> None:
+    """The #40 repro: dataset_number is rejected and datasetNumber suggested."""
+    mcp = MCPServer("live")
+    datasets.register(mcp)
+    tool = {t.name: t for t in mcp._tool_manager.list_tools()}["ami_list_datasets"]
+    result = await tool.fn(
+        patterns="%AZNLO_Zee%",
+        project="mc23_13p6TeV",
+        data_type="DAOD_PHYSLITE",
+        fields="nFiles,totalEvents,dataset_number",
+        limit=3,
+        ctx=_LiveCtx(),
+    )
+    assert result.is_error is True
+    text = result.content[0].text
+    assert "dataset_number" in text
+    assert "datasetNumber" in text

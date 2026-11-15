@@ -31,7 +31,16 @@ from ami_mcp.observability import (
 )
 from ami_mcp.policy import DEFAULT_ALLOWED_COMMANDS, resolve_allowed_commands
 from ami_mcp.resources import register as register_resources
-from ami_mcp.tools import datasets, execute, hashtags, physics, tags, validate, xsecdb
+from ami_mcp.tools import (
+    datasets,
+    execute,
+    fields,
+    hashtags,
+    physics,
+    tags,
+    validate,
+    xsecdb,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Sequence
@@ -100,7 +109,16 @@ def _preflight_check() -> None:
 
 def _register_all(mcp: MCPServer) -> None:
     """Register every tool module and the MCP resources on *mcp*."""
-    for _module in [execute, datasets, hashtags, physics, tags, xsecdb, validate]:
+    for _module in [
+        execute,
+        datasets,
+        fields,
+        hashtags,
+        physics,
+        tags,
+        xsecdb,
+        validate,
+    ]:
         _module.register(mcp)
     register_resources(mcp)
 

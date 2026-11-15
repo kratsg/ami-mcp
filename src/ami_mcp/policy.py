@@ -27,6 +27,7 @@ DEFAULT_ALLOWED_COMMANDS: frozenset[str] = frozenset(
         "GetPhysicsParamsForDataset",
         "DatasetWBListHashtags",
         "DatasetWBListDatasetsForHashtag",
+        "AMIGetEntityInfo",
     }
 )
 

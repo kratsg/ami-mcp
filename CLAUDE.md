@@ -33,6 +33,7 @@ src/ami_mcp/
     ├── _helpers.py      # format_ami_result(), run_ami_command(), scope_to_catalog()
     ├── execute.py       # ami_execute (general purpose AMI command execution)
     ├── datasets.py      # ami_get_dataset_info, ami_get_datasets_info, ami_list_datasets, ami_get_dataset_prov
+    ├── fields.py        # ami_list_fields (entity field names; schema cached in _schema.py)
     ├── hashtags.py      # ami_search_by_hashtags, ami_get_dataset_hashtags
     ├── physics.py       # ami_get_physics_params
     ├── tags.py          # ami_get_ami_tag
@@ -154,7 +155,7 @@ Key conventions:
   not just for static type checking. Getting this wrong raises
   `InvalidSignature: Unable to evaluate type annotations` the moment the tool is
   registered.
-- All 12 tools are read-only AMI/xsec-DB queries against an external service, so
+- All 13 tools are read-only AMI/xsec-DB queries against an external service, so
   every `ToolAnnotations` today is `read_only_hint=True, open_world_hint=True`.
   `destructive_hint`/`idempotent_hint` stay unset — the spec says they're only
   meaningful when `read_only_hint` is false.
@@ -296,7 +297,7 @@ one catalog per campaign:
 ## `ami_execute` command allowlist
 
 `ami_execute` only accepts commands whose leading verb is in
-`ami_mcp.policy.DEFAULT_ALLOWED_COMMANDS` (the 7 verbs documented above),
+`ami_mcp.policy.DEFAULT_ALLOWED_COMMANDS` (the 8 verbs documented above),
 extend-only per deployment via `--allow-command` / `AMI_MCP_ALLOW_COMMANDS` (see
 `docs/configuration.md`). Two decisions here that a future change shouldn't
 re-litigate without discussion:

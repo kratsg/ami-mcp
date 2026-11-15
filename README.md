@@ -182,6 +182,7 @@ and query the external ATLAS AMI service or a local cross-section database
 | `ami_get_datasets_info` | Batch metadata lookup for multiple datasets (one AMI query per catalog) | read-only  |
 | `ami_get_dataset_prov`  | Get provenance chain with lineage summary; filter by data type          | read-only  |
 | `ami_list_datasets`     | Search for datasets by name pattern (supports `%` wildcards)            | read-only  |
+| `ami_list_fields`       | List the valid field names (type, description) of an AMI entity         | read-only  |
 
 ### PMG hashtags
 

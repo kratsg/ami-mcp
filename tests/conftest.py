@@ -6,12 +6,14 @@ import logging
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
 
+import pyAMI.object
 import pytest
 from mcp.types import TextContent
 
 from ami_mcp.auth.factory import EnvBasedClientFactory
 from ami_mcp.observability import configure_logging
 from ami_mcp.policy import DEFAULT_ALLOWED_COMMANDS
+from ami_mcp.tools import _schema
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -67,6 +69,59 @@ def json_log() -> Iterator[JsonLog]:
     yield log
     root.handlers[:] = handlers
     root.setLevel(level)
+
+
+# (field, type, description) rows of the mc23 dataset entity, in the order AMI's
+# AMIGetEntityInfo returns them in its Entity_Fields rowset.
+_MC23_DATASET_FIELDS: list[tuple[str, str, str]] = [
+    ("identifier", "INT", "Unique identifier"),
+    ("logicalDatasetName", "VARCHAR(255)", "Logical dataset name"),
+    ("nFiles", "INT", "Number of files"),
+    ("totalEvents", "BIGINT", "Total number of events"),
+    ("totalSize", "DOUBLE", "Total size in bytes"),
+    ("dataType", "VARCHAR(255)", "Data type"),
+    ("datasetNumber", "INT", "Dataset number (DSID)"),
+    ("physicsShort", "VARCHAR(255)", "Short physics process name"),
+    ("amiStatus", "VARCHAR(255)", "AMI status"),
+    ("physicsCategory", "VARCHAR(255)", "Physics category"),
+    ("jobConfig", "VARCHAR(255)", "Job configuration"),
+    ("crossSection", "DOUBLE", "Cross-section"),
+    ("lastModified", "DATETIME", "Last modification date"),
+    ("projectName", "VARCHAR(255)", "Project name"),
+]
+
+
+def entity_info_xml(fields: list[tuple[str, str, str]] | None = None) -> str:
+    """Build an AMIGetEntityInfo response in the XML shape pyAMI parses."""
+    rows = "".join(
+        f'<row><field name="field">{name}</field><field name="type">{type_}</field>'
+        f'<field name="description">{description}</field>'
+        '<field name="showType">0</field><field name="family">main</field></row>'
+        for name, type_, description in (fields or _MC23_DATASET_FIELDS)
+    )
+    return (
+        "<?xml version='1.0' encoding='utf-8'?><AMIMessage><command>AMIGetEntityInfo"
+        "</command><Result>"
+        '<rowset type="Entity_Info"><row><field name="entityName">dataset</field>'
+        "</row></rowset>"
+        f'<rowset type="Entity_Fields">{rows}</rowset>'
+        '<rowset type="Entity_Relations"></rowset>'
+        "</Result></AMIMessage>"
+    )
+
+
+@pytest.fixture(autouse=True)
+def _fresh_schema_cache() -> Iterator[None]:
+    """Keep the process-wide entity-schema cache from leaking between tests."""
+    _schema.clear_cache()
+    yield
+    _schema.clear_cache()
+
+
+@pytest.fixture
+def entity_info_result() -> pyAMI.object.DOMObject:
+    """Return a real pyAMI DOMObject parsed from a recorded-shape AMIGetEntityInfo."""
+    return pyAMI.object.DOMObject(entity_info_xml())
 
 
 @pytest.fixture
