@@ -553,11 +553,11 @@ def register(mcp: MCPServer) -> None:
         assumes a derivation search; pass data_type="EVNT" to reach the evgen
         catalog instead.
 
-        The evgen datasets are named after that catalog's project, so
-        mc16_13TeV and mc20_13TeV EVNT datasets are called
-        ``mc15_13TeV.<DSID>.<physicsShort>.evgen.EVNT.<etag>``; the tool
-        filters on projectName='mc15_13TeV' for them and reports it as
-        ``searched_project``.
+        Datasets are named after the project of the catalog they are stored
+        in, so mc16_13TeV and mc20_13TeV EVNT datasets are called
+        ``mc15_13TeV.<DSID>.<physicsShort>.evgen.EVNT.<etag>`` and mc20_13TeV
+        HITS datasets ``mc16_13TeV.<DSID>...simul.HITS...``; the tool filters
+        on that projectName and reports it as ``searched_project``.
 
         Results are filtered to amiStatus="VALID" by default; pass
         ami_status=None to see all statuses (e.g. TRASHED, OBSOLETE).
