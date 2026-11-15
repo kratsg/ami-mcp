@@ -26,6 +26,7 @@ _VERBS_HARDCODED_BY_OTHER_TOOLS = frozenset(
         "AMIGetAMITagInfo",
         "GetPhysicsParamsForDataset",
         "DatasetWBListHashtags",
+        "GetEntityInfo",
     }
 )
 
@@ -84,7 +85,7 @@ class TestParseAllowedCommands:
 class TestResolveAllowedCommands:
     def test_defaults_when_no_extra(self) -> None:
         assert resolve_allowed_commands(None) == DEFAULT_ALLOWED_COMMANDS
-        assert len(DEFAULT_ALLOWED_COMMANDS) == 7
+        assert len(DEFAULT_ALLOWED_COMMANDS) == 8
 
     def test_extends_defaults(self) -> None:
         resolved = resolve_allowed_commands(["GetElementInfo"])

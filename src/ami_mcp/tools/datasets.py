@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from typing import Annotated, Any
 
@@ -14,10 +15,19 @@ from ami_mcp.tools._helpers import (
     data_type_to_prod_step,
     format_ami_result,
     format_error,
+    project_data_type_to_catalog,
     rows_to_dicts,
     run_ami_command,
     scope_to_catalog,
 )
+from ami_mcp.tools._schema import (
+    canonicalize_fields,
+    find_unknown_fields,
+    get_entity_fields,
+    split_plain_fields,
+)
+
+_log = logging.getLogger(__name__)
 
 _DATASET_INFO_FIELDS = [
     "logicalDatasetName",
@@ -552,13 +562,45 @@ def register(mcp: MCPServer) -> None:
             project: ATLAS project/campaign (e.g. "mc20_13TeV", "mc23_13p6TeV").
                 Required to select the correct AMI catalog.
             fields: Comma-separated extra fields to return (e.g. "nFiles,totalEvents").
+                Names are validated against the catalog's schema; use
+                ami_list_fields to list them.
             data_type: Filter by data type (e.g. "EVNT", "DAOD_PHYS"). Also
                 selects the catalog searched -- see above.
             ami_status: Filter by amiStatus (default "VALID"). Pass None to
                 search regardless of status.
             limit: Maximum number of results to return (default 100).
         """
-        catalog = scope_to_catalog(project, data_type_to_prod_step(data_type))
+        catalog = project_data_type_to_catalog(project, data_type)
+
+        # AMI returns zero rows, not an error, for an unknown selected field
+        # (#40), so check the names against the entity's schema first. If the
+        # schema cannot be fetched the query proceeds unvalidated.
+        fields_unvalidated = False
+        if fields:
+            try:
+                schema = await get_entity_fields(ctx, catalog, "dataset")
+            except Exception as exc:  # noqa: BLE001
+                _log.warning("Entity schema unavailable for %s: %s", catalog, exc)
+                fields_unvalidated = True
+            else:
+                unknown = find_unknown_fields(
+                    split_plain_fields(fields), schema, "dataset"
+                )
+                if unknown:
+                    return format_error(
+                        ValueError(
+                            "Unknown field(s) for the dataset entity in catalog "
+                            f"{catalog}: {', '.join(unknown)}"
+                        ),
+                        hints=[
+                            *(
+                                f"`{name}`: did you mean {', '.join(f'`{s}`' for s in near)}?"
+                                for name, near in unknown.items()
+                                if near
+                            ),
+                            "Call `ami_list_fields` to see every valid field name.",
+                        ],
+                    )
 
         conditions: list[str] = [
             f"physicsShort LIKE '{patterns}'",
@@ -571,7 +613,12 @@ def register(mcp: MCPServer) -> None:
 
         select_fields = "logicalDatasetName, datasetNumber, physicsShort, amiStatus"
         if fields:
-            select_fields += ", " + fields
+            requested = (
+                [t.strip() for t in fields.split(",") if t.strip()]
+                if fields_unvalidated
+                else canonicalize_fields(fields, schema)
+            )
+            select_fields += ", " + ", ".join(requested)
 
         mql = f"SELECT {select_fields} WHERE {' AND '.join(conditions)} LIMIT 0,{limit}"
         command = f'SearchQuery -catalog={catalog} -entity=dataset -mql="{mql}"'
@@ -599,9 +646,22 @@ def register(mcp: MCPServer) -> None:
             )
         else:
             status_desc = f"amiStatus='{ami_status}'" if ami_status else "any amiStatus"
+            unvalidated_hints = (
+                [
+                    (
+                        "A field name in `fields` may be wrong: AMI returns zero "
+                        "rows for an unknown field, and the schema could not be "
+                        "fetched to check. Call `ami_list_fields` or retry "
+                        "without `fields`."
+                    )
+                ]
+                if fields_unvalidated
+                else []
+            )
             output = append_next_actions(
                 output,
                 [
+                    *unvalidated_hints,
                     (
                         f"Searched catalog `{catalog}` with {status_desc}. "
                         "No matches there doesn't mean the dataset doesn't exist."

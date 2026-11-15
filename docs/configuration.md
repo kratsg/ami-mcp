@@ -6,13 +6,14 @@ icon: lucide/settings
 
 ## Environment variables
 
-| Variable                 | Required    | Description                                                                                                                                                                 |
-| ------------------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `X509_USER_PROXY`        | Recommended | Path to your VOMS proxy certificate (auto-detected from `/tmp/x509up_u<uid>`)                                                                                               |
-| `X509_CERT_DIR`          | Recommended | Directory of CA certificates for SSL verification. **Set automatically** when installed via pixi/conda-forge (`ca-policy-lcg` package). Must be set manually otherwise.     |
-| `AMI_ENDPOINT`           | No          | AMI server endpoint (default: `atlas-replica`)                                                                                                                              |
-| `ATLAS_PMGXSEC_PATH`     | No          | Path to PMGxsecDB text files (default: CVMFS PMGTools directory)                                                                                                            |
-| `AMI_MCP_ALLOW_COMMANDS` | No          | Comma-separated extra AMI command verbs `ami_execute` may run, on top of the built-in read-only set (see [`ami_execute` command allowlist](#ami_execute-command-allowlist)) |
+| Variable                     | Required    | Description                                                                                                                                                                 |
+| ---------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `X509_USER_PROXY`            | Recommended | Path to your VOMS proxy certificate (auto-detected from `/tmp/x509up_u<uid>`)                                                                                               |
+| `X509_CERT_DIR`              | Recommended | Directory of CA certificates for SSL verification. **Set automatically** when installed via pixi/conda-forge (`ca-policy-lcg` package). Must be set manually otherwise.     |
+| `AMI_ENDPOINT`               | No          | AMI server endpoint (default: `atlas-replica`)                                                                                                                              |
+| `ATLAS_PMGXSEC_PATH`         | No          | Path to PMGxsecDB text files (default: CVMFS PMGTools directory)                                                                                                            |
+| `AMI_MCP_SCHEMA_CACHE_TTL_S` | No          | Seconds an entity's field schema (used to validate `ami_list_datasets` `fields`) is cached (default: 86400)                                                                 |
+| `AMI_MCP_ALLOW_COMMANDS`     | No          | Comma-separated extra AMI command verbs `ami_execute` may run, on top of the built-in read-only set (see [`ami_execute` command allowlist](#ami_execute-command-allowlist)) |
 
 ## Authentication
 
@@ -102,7 +103,7 @@ export AMI_ENDPOINT=atlas-replica   # default
 `ami_execute` is the escape hatch for AMI queries no specialized tool covers,
 but it forwards the LLM-formulated command string to AMI's interpreter verbatim.
 To bound that, `ami_execute` only accepts commands whose leading verb is
-allowlisted. The built-in set is exactly the seven commands documented in the
+allowlisted. The built-in set is exactly the eight commands documented in the
 `ami://query-language` resource:
 
 - `SearchQuery`
@@ -112,11 +113,12 @@ allowlisted. The built-in set is exactly the seven commands documented in the
 - `GetPhysicsParamsForDataset`
 - `DatasetWBListHashtags`
 - `DatasetWBListDatasetsForHashtag`
+- `GetEntityInfo`
 
 Extend the set per deployment with `--allow-command VERB` (repeatable, or
 comma-separated in one occurrence) or the `AMI_MCP_ALLOW_COMMANDS` env var
 (comma-separated). The flag replaces the env var rather than adding to it. The
-allowlist is **extend-only** — the seven built-in verbs can never be removed.
+allowlist is **extend-only** — the eight built-in verbs can never be removed.
 
 ```bash
 ami-mcp serve --allow-command GetElementInfo --allow-command SomeOtherVerb

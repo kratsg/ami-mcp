@@ -6,6 +6,7 @@ from collections import OrderedDict
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pyAMI.exception
 import pytest
 from mcp.server.mcpserver import MCPServer
 
@@ -1009,3 +1010,121 @@ class TestAmiGetDatasetsInfo:
         assert "nEvents" not in selected_fields
         assert "prodStep" not in selected_fields
         assert "kFactor" not in selected_fields
+
+
+class TestAmiListDatasetsFieldValidation:
+    """``fields`` is checked against AMI's entity schema before querying (#40)."""
+
+    @pytest.fixture
+    def router(self, mock_ami_client: MagicMock, entity_info_result: Any) -> MagicMock:
+        """Answer GetEntityInfo with the schema and SearchQuery with no rows."""
+
+        def execute(command: str, **_kwargs: Any) -> Any:
+            if command.startswith("GetEntityInfo"):
+                return entity_info_result
+            return _make_result_mock([])
+
+        mock_ami_client.execute.side_effect = execute
+        return mock_ami_client
+
+    @staticmethod
+    def _search_queries(client: MagicMock) -> list[str]:
+        return [
+            c.args[0]
+            for c in client.execute.call_args_list
+            if c.args[0].startswith("SearchQuery")
+        ]
+
+    async def test_unknown_field_is_an_error_naming_it_with_suggestion(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+        router: MagicMock,
+        tool_text: Callable[[CallToolResult], str],
+    ) -> None:
+        result = await registered_tools["ami_list_datasets"](
+            patterns="%AZNLO_Zee%",
+            project="mc23_13p6TeV",
+            data_type="DAOD_PHYSLITE",
+            fields="nFiles,totalEvents,dataset_number",
+            ctx=mock_ctx,
+        )
+        assert result.is_error is True
+        text = tool_text(result)
+        assert "dataset_number" in text
+        assert "datasetNumber" in text
+        assert "ami_list_fields" in text
+        assert self._search_queries(router) == []
+
+    async def test_known_fields_run_the_query(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+        router: MagicMock,
+    ) -> None:
+        result = await registered_tools["ami_list_datasets"](
+            patterns="%Zee%",
+            project="mc23_13p6TeV",
+            fields="nFiles, totalEvents",
+            ctx=mock_ctx,
+        )
+        assert result.is_error is not True
+        assert len(self._search_queries(router)) == 1
+
+    async def test_field_names_are_sent_in_the_schemas_casing(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+        router: MagicMock,
+    ) -> None:
+        # AMI echoes the caller's casing in result keys, so normalizing keeps
+        # row keys canonical whatever casing the caller used.
+        result = await registered_tools["ami_list_datasets"](
+            patterns="%Zee%",
+            project="mc23_13p6TeV",
+            fields="TOTALEVENTS,nfiles",
+            ctx=mock_ctx,
+        )
+        assert result.is_error is not True
+        (query,) = self._search_queries(router)
+        assert "totalEvents, nFiles" in query
+        assert "TOTALEVENTS" not in query
+
+    async def test_no_fields_means_no_schema_fetch(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+        router: MagicMock,
+    ) -> None:
+        await registered_tools["ami_list_datasets"](
+            patterns="%Zee%", project="mc23_13p6TeV", ctx=mock_ctx
+        )
+        assert [c.args[0] for c in router.execute.call_args_list] == (
+            self._search_queries(router)
+        )
+
+    async def test_schema_failure_proceeds_and_hints_on_zero_rows(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+        mock_ami_client: MagicMock,
+        tool_text: Callable[[CallToolResult], str],
+    ) -> None:
+        def execute(command: str, **_kwargs: Any) -> Any:
+            if command.startswith("GetEntityInfo"):
+                msg = "pyAMI exception: not allowed"
+                raise pyAMI.exception.Error(msg)
+            return _make_result_mock([])
+
+        mock_ami_client.execute.side_effect = execute
+        result = await registered_tools["ami_list_datasets"](
+            patterns="%Zee%",
+            project="mc23_13p6TeV",
+            fields="nFiles,dataset_number",
+            ctx=mock_ctx,
+        )
+        assert result.is_error is not True
+        assert result.structured_content["total"] == 0
+        text = tool_text(result)
+        assert "field name" in text.lower()
+        assert "ami_list_fields" in text

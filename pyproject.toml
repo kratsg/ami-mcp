@@ -83,6 +83,11 @@ addopts = ["-ra", "--showlocals", "--strict-markers", "--strict-config", "--doct
 strict = true
 filterwarnings = [
   "error",
+  # pyAMI's HttpClient.create_context() builds ssl.SSLContext(ssl.PROTOCOL_TLS),
+  # deprecated since Python 3.10 and warned about on 3.12+. The warning is
+  # attributed to pyAMI.httpclient (ssl uses stacklevel=2), so scope the ignore
+  # to that module; it is pyAMI's TLS setup, not ours. No upstream report found.
+  "ignore:ssl.PROTOCOL_TLS is deprecated:DeprecationWarning:pyAMI.httpclient",
 ]
 log_level = "INFO"
 testpaths = [

@@ -387,3 +387,13 @@ def scope_to_catalog(scope: str, prod_step: str) -> str:
     # Best-effort fallback: take the mc-prefix and assume _001:production
     short = scope.split("_", maxsplit=1)[0]
     return f"{short}_001:production"
+
+
+def project_data_type_to_catalog(project: str, data_type: str | None) -> str:
+    """Return the AMI catalog searched for a (project, data_type) dataset query.
+
+    Shared by every tool that has to land in the same catalog as
+    ``ami_list_datasets`` (see ``data_type_to_prod_step`` and
+    ``scope_to_catalog`` for the mapping rules).
+    """
+    return scope_to_catalog(project, data_type_to_prod_step(data_type))
