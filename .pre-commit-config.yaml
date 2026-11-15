@@ -66,8 +66,6 @@ repos:
     rev: "57b21406f092110c18776e39b0bda50d37c945c8" # frozen: v2.4.3
     hooks:
       - id: codespell
-        additional_dependencies:
-          - tomli; python_version<'3.11'
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: "a6564f5d57444e123433a5c9af733e3975c77229" # frozen: v0.11.0.1-1
