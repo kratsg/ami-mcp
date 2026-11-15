@@ -308,7 +308,7 @@ async def run_ami_command(
     for attempt in range(1, attempts):
         try:
             return await _attempt()
-        except Exception as exc:  # noqa: PERF203 -- at most one retry by default
+        except Exception as exc:
             if not is_transient(exc):
                 raise
             _log.warning(
