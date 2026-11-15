@@ -48,7 +48,10 @@ class TestSchemaCache:
     ) -> None:
         await SchemaCache().get(mock_ctx, "mc23_001:production", "dataset")
         command = schema_client.execute.call_args.args[0]
-        assert command == 'AMIGetEntityInfo -catalog="mc23_001:production" -entity="dataset"'
+        assert (
+            command
+            == 'AMIGetEntityInfo -catalog="mc23_001:production" -entity="dataset"'
+        )
 
     async def test_second_lookup_is_served_from_cache(
         self, mock_ctx: MagicMock, schema_client: MagicMock
@@ -127,9 +130,7 @@ class TestFindUnknownFields:
         assert unknown["totalEvent"][0] == "totalEvents"
 
     def test_no_match_gives_empty_suggestions(self, fields: list[FieldInfo]) -> None:
-        assert find_unknown_fields(["zzzzqqqq"], fields, "dataset") == {
-            "zzzzqqqq": []
-        }
+        assert find_unknown_fields(["zzzzqqqq"], fields, "dataset") == {"zzzzqqqq": []}
 
     def test_aliases_are_only_used_for_the_dataset_entity(self) -> None:
         # The aliases map to dataset-entity names; a files entity has no such field.

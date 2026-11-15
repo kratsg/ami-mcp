@@ -87,7 +87,9 @@ class TestAmiListFields:
         mock_ctx: MagicMock,
         mock_ami_client: MagicMock,
     ) -> None:
-        mock_ami_client.execute.side_effect = pyAMI.exception.Error("pyAMI exception: x")
+        mock_ami_client.execute.side_effect = pyAMI.exception.Error(
+            "pyAMI exception: x"
+        )
         result = await tool_objs["ami_list_fields"].fn(
             project="mc23_13p6TeV", ctx=mock_ctx
         )
