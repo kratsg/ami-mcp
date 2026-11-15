@@ -12,6 +12,7 @@ from ami_mcp.tools._helpers import (
     append_next_actions,
     format_error,
     run_ami_command,
+    scope_project_names,
 )
 
 _NO_TAGS = "—"
@@ -87,7 +88,12 @@ def register(mcp: MCPServer) -> None:
             scope: ATLAS campaign scope used to filter results client-side
                 (e.g. "mc20_13TeV", "mc23_13p6TeV"). Defaults to "mc23_13p6TeV".
                 The AMI command returns datasets from all campaigns; this
-                prefix-matches the ldn field.
+                prefix-matches the ldn field against every project name the
+                campaign's datasets carry across production steps. Hashtags sit
+                on EVNT datasets, so e.g. "mc20_13TeV" matches mc15_13TeV.*
+                (evgen), mc16_13TeV.* (sim) and mc20_13TeV.* LDNs. mc16_13TeV
+                and mc20_13TeV share their evgen datasets, so both scopes
+                return the same mc15_13TeV.* EVNT datasets.
         """
         scope_levels = ["PMGL1"]
         name_values = [l1]
@@ -110,8 +116,12 @@ def register(mcp: MCPServer) -> None:
         try:
             result = await run_ami_command(ctx, command)
             rows = result.get_rows()
-            # Filter to the requested campaign scope client-side
-            rows = [r for r in rows if r.get("ldn", "").startswith(f"{scope}.")]
+            # Filter to the requested campaign scope client-side. A campaign's
+            # datasets are named after the project of the catalog they are
+            # stored in (mc20 EVNT is mc15_13TeV.*), so match every project
+            # name the campaign uses, not only the scope itself.
+            prefixes = tuple(f"{name}." for name in scope_project_names(scope))
+            rows = [r for r in rows if r.get("ldn", "").startswith(prefixes)]
             if not rows:
                 return CallToolResult(
                     content=[TextContent(type="text", text="No results.")],

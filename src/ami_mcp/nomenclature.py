@@ -77,7 +77,9 @@ mc21_13p6TeV     mc21_001:production         Run 3 pilot
 mc23_13p6TeV     mc23_001:production         Run 3
 
 Note: mc16 and mc20 evgen datasets live in the mc15 AMI catalog because they
-were generated with mc15-era job options.
+were generated with mc15-era job options. They are also named
+mc15_13TeV.<DSID>...evgen.EVNT.<etag> (there are no mc20_13TeV EVNT datasets).
+mc20 HITS live in mc16_001 and are named mc16_13TeV.*: a dataset's project name is the prefix of its catalog.
 
 Standard physics metadata fields on EVNT datasets:
   crossSection    generator-level cross-section (in nb in AMI; convert x1000 for pb)

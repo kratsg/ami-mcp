@@ -397,3 +397,43 @@ def project_data_type_to_catalog(project: str, data_type: str | None) -> str:
     ``scope_to_catalog`` for the mapping rules).
     """
     return scope_to_catalog(project, data_type_to_prod_step(data_type))
+
+
+def _project_name(scope: str, prod_step: str) -> str:
+    """Return the ``projectName`` of *scope*'s datasets at *prod_step*.
+
+    Datasets are named after the project of the catalog they are stored in, not
+    the campaign that consumes them: mc16/mc20 EVNT live in
+    ``mc15_001:production`` and are called ``mc15_13TeV.<DSID>...EVNT...``, and
+    mc20 HITS live in ``mc16_001:production`` and are called
+    ``mc16_13TeV.<DSID>...HITS...``. The name is the catalog prefix from
+    ``_SCOPE_TO_CATALOG`` plus the scope's energy suffix; a scope whose catalog
+    is its own (or unknown) keeps its name.
+    """
+    catalog_project = scope_to_catalog(scope, prod_step).split("_", maxsplit=1)[0]
+    scope_project, _, energy = scope.partition("_")
+    if catalog_project == scope_project:
+        return scope
+    return f"{catalog_project}_{energy}"
+
+
+def project_data_type_to_project_name(project: str, data_type: str | None) -> str:
+    """Return the ``projectName`` that datasets of (project, data_type) carry in AMI.
+
+    mc16 and mc20 EVNT/HEPMC are ``mc15_13TeV`` and mc20 HITS is ``mc16_13TeV``,
+    so filtering them on ``projectName = 'mc20_13TeV'`` matches nothing. Every
+    other combination keeps the requested project (see ``_project_name``).
+    """
+    return _project_name(project, data_type_to_prod_step(data_type))
+
+
+def scope_project_names(scope: str) -> tuple[str, ...]:
+    """Return every ``projectName`` carried by datasets of the *scope* campaign.
+
+    One name per production step (evgen, sim, reco), de-duplicated in that
+    order, e.g. ``("mc15_13TeV", "mc16_13TeV", "mc20_13TeV")`` for
+    ``mc20_13TeV``. Used to match a campaign's datasets by LDN prefix.
+    """
+    return tuple(
+        dict.fromkeys(_project_name(scope, step) for step in ("evgen", "sim", "reco"))
+    )

@@ -710,6 +710,96 @@ class TestAmiListDatasetsCatalogSelection:
         # appear as a WHERE condition.
         assert "amiStatus =" not in executed_commands[0]
 
+    @pytest.mark.parametrize(
+        ("project", "data_type", "expected_project"),
+        [
+            ("mc20_13TeV", "EVNT", "mc15_13TeV"),
+            ("mc16_13TeV", "EVNT", "mc15_13TeV"),
+            ("mc20_13TeV", "DAOD_PHYS", "mc20_13TeV"),
+            ("mc23_13p6TeV", "EVNT", "mc23_13p6TeV"),
+        ],
+    )
+    async def test_projectname_filter_matches_the_catalog_searched(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+        project: str,
+        data_type: str,
+        expected_project: str,
+    ) -> None:
+        """mc20 EVNT is mc15_13TeV.* in mc15_001; filtering mc20_13TeV finds nothing."""
+        result_mock = _make_result_mock([])
+        executed_commands: list[str] = []
+
+        async def capture(_func, *args, **_kwargs):
+            executed_commands.append(str(args[0]))
+            return result_mock
+
+        with patch("ami_mcp.tools.datasets.run_ami_command", new=capture):
+            fn = registered_tools["ami_list_datasets"]
+            await fn(
+                patterns="%Zee%", project=project, data_type=data_type, ctx=mock_ctx
+            )
+
+        assert f"projectName = '{expected_project}'" in executed_commands[0]
+
+    async def test_evgen_search_tells_the_caller_about_the_renamed_project(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+        tool_text: Callable[[CallToolResult], str],
+    ) -> None:
+        rows = [
+            OrderedDict(
+                [
+                    (
+                        "logicalDatasetName",
+                        "mc15_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.evgen.EVNT.e8351",
+                    ),
+                    ("physicsShort", "Sh_2211_Zee_maxHTpTV2_BFilter"),
+                    ("amiStatus", "VALID"),
+                ]
+            )
+        ]
+        with patch(
+            "ami_mcp.tools.datasets.run_ami_command",
+            new=AsyncMock(return_value=_make_result_mock(rows)),
+        ):
+            fn = registered_tools["ami_list_datasets"]
+            result = await fn(
+                patterns="%Zee%",
+                project="mc20_13TeV",
+                data_type="EVNT",
+                ctx=mock_ctx,
+            )
+
+        output = tool_text(result)
+        assert "mc15_13TeV" in output
+        assert result.structured_content is not None
+        assert result.structured_content["searched_project"] == "mc15_13TeV"
+
+    async def test_no_rename_note_when_project_is_unchanged(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+        tool_text: Callable[[CallToolResult], str],
+    ) -> None:
+        with patch(
+            "ami_mcp.tools.datasets.run_ami_command",
+            new=AsyncMock(return_value=_make_result_mock([])),
+        ):
+            fn = registered_tools["ami_list_datasets"]
+            result = await fn(
+                patterns="%Zee%",
+                project="mc23_13p6TeV",
+                data_type="EVNT",
+                ctx=mock_ctx,
+            )
+
+        assert "mc15_13TeV" not in tool_text(result)
+        assert result.structured_content is not None
+        assert result.structured_content["searched_project"] == "mc23_13p6TeV"
+
     async def test_empty_result_hints_name_catalog_and_status(
         self,
         registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],

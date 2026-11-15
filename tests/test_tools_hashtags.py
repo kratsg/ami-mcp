@@ -159,6 +159,48 @@ class TestAmiSearchByHashtags:
         assert "12345" not in output
         assert "mc20_13TeV.700320.Sh_2211_Zee.evgen.EVNT.e8351" in output
 
+    @pytest.mark.parametrize(
+        ("scope", "kept", "dropped"),
+        [
+            # mc20 evgen/sim datasets are named mc15_13TeV / mc16_13TeV.
+            (
+                "mc20_13TeV",
+                [
+                    "mc15_13TeV.700320.Sh.evgen.EVNT.e8351",
+                    "mc16_13TeV.700320.Sh.simul.HITS.e8351_s3681",
+                    "mc20_13TeV.700320.Sh.deriv.DAOD_PHYS.e8351_p5855",
+                ],
+                ["mc23_13p6TeV.700982.Sh.evgen.EVNT.e8514"],
+            ),
+            (
+                "mc23_13p6TeV",
+                ["mc23_13p6TeV.700982.Sh.evgen.EVNT.e8514"],
+                ["mc15_13TeV.700320.Sh.evgen.EVNT.e8351"],
+            ),
+        ],
+    )
+    async def test_scope_covers_the_campaigns_project_names(
+        self,
+        registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],
+        mock_ctx: MagicMock,
+        scope: str,
+        kept: list[str],
+        dropped: list[str],
+    ) -> None:
+        result_mock = MagicMock()
+        result_mock.get_rows.return_value = [
+            OrderedDict([("ldn", ldn)]) for ldn in [*kept, *dropped]
+        ]
+        with patch(
+            "ami_mcp.tools.hashtags.run_ami_command",
+            new=AsyncMock(return_value=result_mock),
+        ):
+            fn = registered_tools["ami_search_by_hashtags"]
+            result = await fn(scope=scope, l1="WeakBoson", ctx=mock_ctx)
+
+        assert result.structured_content is not None
+        assert [d["ldn"] for d in result.structured_content["datasets"]] == kept
+
     async def test_no_datasets_match_scope(
         self,
         registered_tools: dict[str, Callable[..., Awaitable[CallToolResult]]],

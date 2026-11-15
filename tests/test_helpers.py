@@ -16,8 +16,10 @@ from ami_mcp.tools._helpers import (
     format_error,
     is_frequency_limited,
     is_transient,
+    project_data_type_to_project_name,
     rows_to_dicts,
     run_ami_command,
+    scope_project_names,
     scope_to_catalog,
 )
 
@@ -202,6 +204,52 @@ class TestScopeToCatalog:
 
     def test_unknown_project_falls_back_regardless_of_prod_step(self) -> None:
         assert scope_to_catalog("data22_13p6TeV", "evgen") == "data22_001:production"
+
+
+class TestProjectDataTypeToProjectName:
+    @pytest.mark.parametrize(
+        ("project", "data_type", "expected"),
+        [
+            # mc16/mc20 evgen datasets are named after the mc15 project they
+            # are stored under, e.g. mc15_13TeV.700320...evgen.EVNT.e8351.
+            ("mc20_13TeV", "EVNT", "mc15_13TeV"),
+            ("mc20_13TeV", "HEPMC", "mc15_13TeV"),
+            ("mc16_13TeV", "EVNT", "mc15_13TeV"),
+            # mc20 sim datasets live in mc16_001 and are named mc16_13TeV.*.
+            ("mc20_13TeV", "HITS", "mc16_13TeV"),
+            ("mc16_13TeV", "HITS", "mc16_13TeV"),
+            ("mc21_13p6TeV", "HITS", "mc21_13p6TeV"),
+            # Everything else keeps the requested project name.
+            ("mc20_13TeV", "DAOD_PHYS", "mc20_13TeV"),
+            ("mc20_13TeV", None, "mc20_13TeV"),
+            ("mc23_13p6TeV", "EVNT", "mc23_13p6TeV"),
+            ("mc21_13p6TeV", "EVNT", "mc21_13p6TeV"),
+            ("data22_13p6TeV", "EVNT", "data22_13p6TeV"),
+        ],
+    )
+    def test_evgen_project_follows_the_evgen_catalog(
+        self, project: str, data_type: str | None, expected: str
+    ) -> None:
+        assert project_data_type_to_project_name(project, data_type) == expected
+
+
+class TestScopeProjectNames:
+    @pytest.mark.parametrize(
+        ("scope", "expected"),
+        [
+            # One project name per production step the campaign's datasets
+            # are stored under: evgen, sim, reco.
+            ("mc20_13TeV", ("mc15_13TeV", "mc16_13TeV", "mc20_13TeV")),
+            ("mc16_13TeV", ("mc15_13TeV", "mc16_13TeV")),
+            ("mc21_13p6TeV", ("mc21_13p6TeV",)),
+            ("mc23_13p6TeV", ("mc23_13p6TeV",)),
+            ("data22_13p6TeV", ("data22_13p6TeV",)),
+        ],
+    )
+    def test_names_across_production_steps(
+        self, scope: str, expected: tuple[str, ...]
+    ) -> None:
+        assert scope_project_names(scope) == expected
 
 
 class TestIsTransient:
