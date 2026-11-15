@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import os
 import sys
 from contextlib import asynccontextmanager
@@ -25,6 +24,11 @@ from ami_mcp.auth.broker import (
 from ami_mcp.auth.factory import EnvBasedClientFactory
 from ami_mcp.auth.shared_secret import SharedSecretVerifier
 from ami_mcp.nomenclature import AMI_QUERY_LANGUAGE, ATLAS_NOMENCLATURE
+from ami_mcp.observability import (
+    LoggingMCPServer,
+    RequestLogMiddleware,
+    configure_logging,
+)
 from ami_mcp.policy import DEFAULT_ALLOWED_COMMANDS, resolve_allowed_commands
 from ami_mcp.resources import register as register_resources
 from ami_mcp.tools import datasets, execute, hashtags, physics, tags, validate, xsecdb
@@ -94,22 +98,6 @@ def _preflight_check() -> None:
         sys.stderr.write(f"[ami-mcp] WARNING: {w}\n")
 
 
-def _configure_logging(log_level: str) -> None:
-    """Apply the CLI log level to the root logger.
-
-    ``uvicorn.run(log_level=...)`` configures only uvicorn's own loggers, so
-    library loggers (e.g. af_credentials.verifier's DEBUG token-rejection
-    reasons, mcp SDK internals) would otherwise never reach a handler.
-    basicConfig attaches a stderr handler only if none exists; the level is
-    set explicitly so it applies even when a handler is already configured.
-    """
-    logging.basicConfig(
-        stream=sys.stderr,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
-    logging.getLogger().setLevel(log_level.upper())
-
-
 def _register_all(mcp: MCPServer) -> None:
     """Register every tool module and the MCP resources on *mcp*."""
     for _module in [execute, datasets, hashtags, physics, tags, xsecdb, validate]:
@@ -166,7 +154,7 @@ def _make_shared_secret_app(
         finally:
             factory.close()
 
-    mcp = MCPServer(
+    mcp = LoggingMCPServer(
         "ami-mcp",
         instructions=_INSTRUCTIONS,
         lifespan=_lifespan,
@@ -190,7 +178,9 @@ def _make_shared_secret_app(
     # in the SDK, and an untyped decorator strips _healthz's type under mypy.
     mcp.custom_route("/healthz", methods=["GET"])(_healthz)
 
-    return mcp.streamable_http_app(streamable_http_path="/mcp", host=host)
+    app = mcp.streamable_http_app(streamable_http_path="/mcp", host=host)
+    app.add_middleware(RequestLogMiddleware)
+    return app
 
 
 def _make_broker_app(
@@ -221,10 +211,11 @@ def _make_broker_app(
         finally:
             factory.close()
 
-    mcp = MCPServer(
+    mcp = LoggingMCPServer(
         "ami-mcp",
         instructions=_INSTRUCTIONS,
         lifespan=_lifespan,
+        log_subject=True,
         token_verifier=verifier,
         auth=AuthSettings(
             issuer_url=AnyHttpUrl(resource_url),
@@ -242,7 +233,9 @@ def _make_broker_app(
 
     mcp.custom_route("/healthz", methods=["GET"])(_healthz)
 
-    return mcp.streamable_http_app(streamable_http_path="/mcp", host=host)
+    app = mcp.streamable_http_app(streamable_http_path="/mcp", host=host)
+    app.add_middleware(RequestLogMiddleware)
+    return app
 
 
 def serve(
@@ -329,7 +322,7 @@ def serve(
 
     # HTTP transport only: stdio uses stdout for the MCP protocol and gets no
     # root logging configuration, matching where log_level is honored today.
-    _configure_logging(log_level)
+    configure_logging(log_level)
     uvicorn.run(
         app,
         host=host,
@@ -337,4 +330,6 @@ def serve(
         proxy_headers=True,
         forwarded_allow_ips=forwarded_allow_ips,
         log_level=log_level,
+        access_log=False,  # RequestLogMiddleware writes the access line
+        log_config=None,  # uvicorn's own lines go through configure_logging
     )

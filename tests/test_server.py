@@ -13,8 +13,9 @@ from mcp.server.mcpserver import MCPServer
 from starlette.testclient import TestClient
 
 from ami_mcp.auth.factory import EnvBasedClientFactory
+from ami_mcp.observability import configure_logging
 from ami_mcp.policy import DEFAULT_ALLOWED_COMMANDS
-from ami_mcp.server import _configure_logging, _preflight_check, _register_all
+from ami_mcp.server import _preflight_check, _register_all
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -62,17 +63,17 @@ class TestConfigureLogging:
 
     def test_debug_enables_library_debug_logging(self) -> None:
         """--log-level debug must reach library loggers, not just uvicorn's."""
-        _configure_logging("debug")
+        configure_logging("debug")
         assert logging.getLogger("af_credentials.verifier").isEnabledFor(logging.DEBUG)
 
     def test_info_does_not_enable_debug(self) -> None:
-        _configure_logging("info")
+        configure_logging("info")
         verifier = logging.getLogger("af_credentials.verifier")
         assert not verifier.isEnabledFor(logging.DEBUG)
         assert verifier.isEnabledFor(logging.INFO)
 
     def test_warning_silences_info(self) -> None:
-        _configure_logging("warning")
+        configure_logging("warning")
         verifier = logging.getLogger("af_credentials.verifier")
         assert not verifier.isEnabledFor(logging.INFO)
         assert verifier.isEnabledFor(logging.WARNING)
