@@ -34,7 +34,15 @@ events ∈ files ∈ datasets ∈ dataset containers ∈ campaigns
 !!! note
 
     mc16 and mc20 evgen datasets live in the `mc15_001:production` AMI catalog
-    because they were generated with mc15-era job options.
+    because they were generated with mc15-era job options. Those EVNT datasets
+    are also named after that project, e.g. `mc15_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.evgen.EVNT.e8351`
+    (there are no `mc20_13TeV...EVNT` datasets). Likewise mc20 HITS live in
+    `mc16_001:production` and are named `mc16_13TeV.*`, e.g.
+    `mc16_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.simul.HITS.e8351_e7400_s3126`.
+    The rule: a dataset's project name is the prefix of the catalog it is stored in
+    (see the table) plus the campaign's energy suffix. `ami_search_by_hashtags`
+    applies it too: `scope="mc20_13TeV"` means the mc20 campaign across steps and
+    matches `mc15_13TeV.*`, `mc16_13TeV.*` and `mc20_13TeV.*` LDNs.
 
 ## Monte Carlo format
 

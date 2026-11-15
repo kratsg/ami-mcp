@@ -187,3 +187,45 @@ async def test_ami_list_datasets_unknown_field_errors_with_suggestion() -> None:
     text = result.content[0].text
     assert "dataset_number" in text
     assert "datasetNumber" in text
+
+
+@pytest.mark.slow
+async def test_ami_list_datasets_finds_mc20_evgen_named_mc15_13tev() -> None:
+    """mc20_13TeV EVNT datasets are named mc15_13TeV.* and stored in mc15_001."""
+    mcp = MCPServer("live")
+    datasets.register(mcp)
+    tool = {t.name: t for t in mcp._tool_manager.list_tools()}["ami_list_datasets"]
+    result = await tool.fn(
+        patterns="%Sh_2211_Zee_maxHTpTV2_BFilter%",
+        project="mc20_13TeV",
+        data_type="EVNT",
+        ctx=_LiveCtx(),
+    )
+    assert result.is_error is not True
+    assert result.structured_content["catalog"] == "mc15_001:production"
+    assert result.structured_content["searched_project"] == "mc15_13TeV"
+    ldns = {r["logicalDatasetName"] for r in result.structured_content["rows"]}
+    assert "mc15_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.evgen.EVNT.e8351" in ldns
+
+
+@pytest.mark.slow
+async def test_ami_list_datasets_finds_mc20_sim_named_mc16_13tev() -> None:
+    """mc20_13TeV HITS datasets are named mc16_13TeV.* and stored in mc16_001."""
+    mcp = MCPServer("live")
+    datasets.register(mcp)
+    tool = {t.name: t for t in mcp._tool_manager.list_tools()}["ami_list_datasets"]
+    result = await tool.fn(
+        patterns="%Sh_2211_Zee_maxHTpTV2_BFilter%",
+        project="mc20_13TeV",
+        data_type="HITS",
+        ami_status=None,
+        ctx=_LiveCtx(),
+    )
+    assert result.is_error is not True
+    assert result.structured_content["catalog"] == "mc16_001:production"
+    assert result.structured_content["searched_project"] == "mc16_13TeV"
+    ldns = {r["logicalDatasetName"] for r in result.structured_content["rows"]}
+    assert (
+        "mc16_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.simul.HITS.e8351_e7400_s3126"
+        in ldns
+    )
