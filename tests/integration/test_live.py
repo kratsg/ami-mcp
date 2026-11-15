@@ -22,11 +22,12 @@ from ami_mcp.tools import datasets, fields
 def test_ami_execute_searchquery() -> None:
     """ami_execute with a simple SearchQuery returns results."""
     client = pyAMI.client.Client("atlas-replica")
+    # Plain MQL form (no backtick-qualified names, which AMI fails to parse);
+    # the row limit is a separate argument.
     cmd = (
-        'SearchQuery -catalog="mc23_001:production" -entity="HASHTAGS"'
-        ' -mql="SELECT DISTINCT `mc23_001:production`.`HASHTAGS`.`NAME`'
-        " WHERE `mc23_001:production`.`HASHTAGS`.`SCOPE` = 'PMGL1'"
-        ' LIMIT 5"'
+        "SearchQuery -catalog=mc23_001:production -entity=HASHTAGS"
+        " -mql=\"SELECT DISTINCT NAME WHERE SCOPE = 'PMGL1'\""
+        ' -limit="5"'
     )
     result = client.execute(cmd, format="dom_object")
     rows = result.get_rows()
@@ -37,8 +38,8 @@ def test_ami_execute_searchquery() -> None:
 def test_ami_get_dataset_info_known_dataset() -> None:
     """ami_get_dataset_info returns metadata for a known EVNT dataset."""
     client = pyAMI.client.Client("atlas-replica")
-    # mc20 Zee sample — should be stable
-    ldn = "mc20_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.evgen.EVNT.e8351"
+    # mc20 evgen datasets are named mc15_13TeV.* (no mc20_13TeV EVNT exists)
+    ldn = "mc15_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.evgen.EVNT.e8351"
     rows = api.get_dataset_info(client, ldn)
     assert len(rows) > 0
     row = rows[0]
@@ -47,7 +48,12 @@ def test_ami_get_dataset_info_known_dataset() -> None:
 
 @pytest.mark.slow
 def test_ami_search_by_hashtags_weakboson() -> None:
-    """Searching for WeakBoson/Vjets/Baseline returns mc20 datasets."""
+    """Searching for WeakBoson/Vjets/Baseline returns datasets of known campaigns.
+
+    AMI returns the hashtag's datasets from every campaign; mc20 has none
+    because its evgen datasets are named mc15_13TeV.*, so only assert on the
+    mc21/mc23 rows.
+    """
     client = pyAMI.client.Client("atlas-replica")
     cmd = (
         "DatasetWBListDatasetsForHashtag"
@@ -58,21 +64,23 @@ def test_ami_search_by_hashtags_weakboson() -> None:
     result = client.execute(cmd, format="dom_object")
     rows = result.get_rows()
     assert len(rows) > 0
-    # Filter to mc20 and verify at least one match
-    mc20_rows = [r for r in rows if r.get("ldn", "").startswith("mc20_13TeV.")]
-    assert len(mc20_rows) > 0
+    known_campaigns = ("mc21_13p6TeV.", "mc23_13p6TeV.")
+    known_rows = [r for r in rows if r.get("ldn", "").startswith(known_campaigns)]
+    assert len(known_rows) > 0
 
 
 @pytest.mark.slow
 def test_ami_get_physics_params_known_dataset() -> None:
     """GetPhysicsParamsForDataset returns crossSection for a known dataset."""
     client = pyAMI.client.Client("atlas-replica")
-    ldn = "mc20_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.evgen.EVNT.e8351"
+    ldn = "mc15_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.evgen.EVNT.e8351"
     cmd = f'GetPhysicsParamsForDataset -logicalDatasetName="{ldn}"'
     result = client.execute(cmd, format="dom_object")
     rows = result.get_rows()
-    assert len(rows) > 0
-    assert "crossSection" in rows[0]
+    # One row per parameter: the parameter's name is in paramName, not a key.
+    cross_sections = [r for r in rows if r["paramName"] == "crossSection"]
+    assert cross_sections
+    assert float(cross_sections[0]["paramValue"]) > 0
 
 
 @pytest.mark.slow
@@ -103,8 +111,8 @@ def test_ami_get_datasets_info_in_clause_finds_one_and_skips_missing() -> None:
     collapse to one AMI command per catalog instead of one per LDN.
     """
     client = pyAMI.client.Client("atlas-replica")
-    known = "mc20_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.evgen.EVNT.e8351"
-    missing = "mc20_13TeV.999999.NoSuchSample.evgen.EVNT.e0000"
+    known = "mc15_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.evgen.EVNT.e8351"
+    missing = "mc15_13TeV.999999.NoSuchSample.evgen.EVNT.e0000"
     mql = (
         "SELECT logicalDatasetName, nFiles, totalEvents, amiStatus"
         f" WHERE logicalDatasetName IN ('{known}', '{missing}') LIMIT 0,5"
@@ -118,22 +126,23 @@ def test_ami_get_datasets_info_in_clause_finds_one_and_skips_missing() -> None:
 
 @pytest.mark.slow
 def test_ami_list_datasets_finds_mc20_evgen_in_mc15_catalog() -> None:
-    """Confirms the mc15 evgen-catalog branch: mc20_13TeV EVNT lives in mc15_001.
+    """Confirms the mc15 evgen-catalog branch: mc20 EVNT lives in mc15_001.
 
-    Companion to the mc20 derivation test above -- if this one fails, the
-    evgen special case in the scope_to_catalog table is dead weight for
-    ami_list_datasets and should collapse to the project's own prefix.
+    Companion to the mc20 derivation test above. mc20 evgen datasets are
+    named mc15_13TeV.*, so they are found by projectName 'mc15_13TeV' in
+    mc15_001 (and not by 'mc20_13TeV' anywhere).
     """
     client = pyAMI.client.Client("atlas-replica")
     mql = (
         "SELECT logicalDatasetName, physicsShort, amiStatus"
-        " WHERE physicsShort LIKE '%Zee%' AND projectName = 'mc20_13TeV'"
+        " WHERE physicsShort LIKE '%Zee%' AND projectName = 'mc15_13TeV'"
         " AND dataType = 'EVNT' LIMIT 0,5"
     )
     cmd = f'SearchQuery -catalog=mc15_001:production -entity=dataset -mql="{mql}"'
     result = client.execute(cmd, format="dom_object")
     rows = result.get_rows()
     assert len(rows) > 0
+    assert all(r["logicalDatasetName"].startswith("mc15_13TeV.") for r in rows)
 
 
 class _LiveCtx:
