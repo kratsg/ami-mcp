@@ -150,3 +150,21 @@ The PMG cross-section database files are tab-separated text files named
 If `ATLAS_PMGXSEC_PATH` is not set, `ami_list_xsec_databases` and
 `ami_lookup_xsec` will use this default path. Set it to an alternative location
 if you have a local copy.
+
+## Logging
+
+Over HTTP transport the server writes one JSON object per line to stdout, with
+`timestamp`, `level`, `logger` and `event` on every line. The verbosity is
+`--log-level` (chart value `logLevel`).
+
+- Every line written while serving a request carries `request_id`, taken from
+  the `X-Request-ID` header the AF MCP broker sends (generated when absent).
+- Each request writes one `http.request` line with `method`, `path`, `status`
+  and `duration_ms`. A successful `/healthz` probe writes none; a failing one
+  does.
+- Each tool call writes one `tool.call` line with `tool`, `duration_ms` and
+  `outcome` (`ok` or `error`). In broker mode it also carries `subject`, the
+  verified token's `sub`. Tokens, tool arguments and tool results are never
+  logged.
+
+Stdio transport keeps stdout for the MCP protocol and writes no log lines.
