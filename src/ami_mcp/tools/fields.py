@@ -35,6 +35,8 @@ class AmiListFieldsResult(BaseModel):
 
 
 def register(mcp: MCPServer) -> None:
+    """Register the field-discovery tool."""
+
     @mcp.tool(
         annotations=ToolAnnotations(
             title="List entity fields",
