@@ -397,3 +397,22 @@ def project_data_type_to_catalog(project: str, data_type: str | None) -> str:
     ``scope_to_catalog`` for the mapping rules).
     """
     return scope_to_catalog(project, data_type_to_prod_step(data_type))
+
+
+def project_data_type_to_project_name(project: str, data_type: str | None) -> str:
+    """Return the ``projectName`` that datasets of (project, data_type) carry in AMI.
+
+    Evgen datasets are named after the project of the catalog they are stored
+    in, not the campaign that consumes them: mc16 and mc20 EVNT live in
+    ``mc15_001:production`` and are called ``mc15_13TeV.<DSID>...EVNT...``, so
+    filtering them on ``projectName = 'mc20_13TeV'`` matches nothing. The name
+    is derived from the ``_SCOPE_TO_CATALOG`` table (catalog prefix plus the
+    requested project's energy suffix); every other combination keeps the
+    requested project.
+    """
+    catalog = project_data_type_to_catalog(project, data_type)
+    catalog_project = catalog.split("_", maxsplit=1)[0]
+    requested_project, _, energy = project.partition("_")
+    if catalog_project == requested_project:
+        return project
+    return f"{catalog_project}_{energy}"

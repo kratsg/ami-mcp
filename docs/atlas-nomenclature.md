@@ -34,7 +34,9 @@ events ∈ files ∈ datasets ∈ dataset containers ∈ campaigns
 !!! note
 
     mc16 and mc20 evgen datasets live in the `mc15_001:production` AMI catalog
-    because they were generated with mc15-era job options.
+    because they were generated with mc15-era job options. Those EVNT datasets
+    are also named after that project, e.g. `mc15_13TeV.700320.Sh_2211_Zee_maxHTpTV2_BFilter.evgen.EVNT.e8351`
+    (there are no `mc20_13TeV...EVNT` datasets).
 
 ## Monte Carlo format
 

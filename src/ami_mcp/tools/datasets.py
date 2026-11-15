@@ -16,6 +16,7 @@ from ami_mcp.tools._helpers import (
     format_ami_result,
     format_error,
     project_data_type_to_catalog,
+    project_data_type_to_project_name,
     rows_to_dicts,
     run_ami_command,
     scope_to_catalog,
@@ -77,6 +78,7 @@ class AmiListDatasetsResult(BaseModel):
 
     patterns: str
     project: str
+    searched_project: str
     catalog: str
     ami_status: str | None
     rows: list[dict[str, Any]]
@@ -551,6 +553,12 @@ def register(mcp: MCPServer) -> None:
         assumes a derivation search; pass data_type="EVNT" to reach the evgen
         catalog instead.
 
+        The evgen datasets are named after that catalog's project, so
+        mc16_13TeV and mc20_13TeV EVNT datasets are called
+        ``mc15_13TeV.<DSID>.<physicsShort>.evgen.EVNT.<etag>``; the tool
+        filters on projectName='mc15_13TeV' for them and reports it as
+        ``searched_project``.
+
         Results are filtered to amiStatus="VALID" by default; pass
         ami_status=None to see all statuses (e.g. TRASHED, OBSOLETE).
 
@@ -571,6 +579,7 @@ def register(mcp: MCPServer) -> None:
             limit: Maximum number of results to return (default 100).
         """
         catalog = project_data_type_to_catalog(project, data_type)
+        searched_project = project_data_type_to_project_name(project, data_type)
 
         # AMI returns zero rows, not an error, for an unknown selected field
         # (#40), so check the names against the entity's schema first. If the
@@ -604,7 +613,7 @@ def register(mcp: MCPServer) -> None:
 
         conditions: list[str] = [
             f"physicsShort LIKE '{patterns}'",
-            f"projectName = '{project}'",
+            f"projectName = '{searched_project}'",
         ]
         if ami_status:
             conditions.append(f"amiStatus = '{ami_status}'")
@@ -636,10 +645,21 @@ def register(mcp: MCPServer) -> None:
             )
 
         output = format_ami_result(rows)
+        project_note = (
+            [
+                (
+                    f"{project} {data_type} datasets are named {searched_project}.* "
+                    f"in AMI; searched projectName='{searched_project}'."
+                )
+            ]
+            if searched_project != project
+            else []
+        )
         if rows:
             output = append_next_actions(
                 output,
                 [
+                    *project_note,
                     "Use `ami_get_dataset_info` on a specific LDN for full metadata.",
                     "Use `ami_get_physics_params` on an EVNT LDN for cross-section details.",
                 ],
@@ -661,6 +681,7 @@ def register(mcp: MCPServer) -> None:
             output = append_next_actions(
                 output,
                 [
+                    *project_note,
                     *unvalidated_hints,
                     (
                         f"Searched catalog `{catalog}` with {status_desc}. "
@@ -679,6 +700,7 @@ def register(mcp: MCPServer) -> None:
         payload = AmiListDatasetsResult(
             patterns=patterns,
             project=project,
+            searched_project=searched_project,
             catalog=catalog,
             ami_status=ami_status,
             rows=rows_to_dicts(rows),
