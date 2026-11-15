@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 from starlette.applications import Starlette
@@ -16,7 +16,6 @@ from ami_mcp.observability import (
     MAX_REQUEST_ID_CHARS,
     JsonFormatter,
     RequestLogMiddleware,
-    configure_logging,
     request_id_var,
 )
 
@@ -24,7 +23,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from conftest import JsonLog
-
     from starlette.requests import Request
     from starlette.responses import Response
 
@@ -59,7 +57,9 @@ def client(json_log: JsonLog) -> Iterator[TestClient]:
 
 class TestJsonFormatter:
     def test_standard_fields_are_present(self) -> None:
-        record = logging.LogRecord("ami_mcp.x", logging.WARNING, "f", 1, "evt", (), None)
+        record = logging.LogRecord(
+            "ami_mcp.x", logging.WARNING, "f", 1, "evt", (), None
+        )
         entry = json.loads(JsonFormatter().format(record))
 
         assert entry["logger"] == "ami_mcp.x"
@@ -119,7 +119,9 @@ class TestRequestLogMiddleware:
     ) -> None:
         client.get("/work", headers={"X-Request-ID": "abc"})
 
-        access = next(line for line in json_log.lines() if line["event"] == "http.request")
+        access = next(
+            line for line in json_log.lines() if line["event"] == "http.request"
+        )
         assert (access["method"], access["path"], access["status"]) == (
             "GET",
             "/work",
@@ -150,9 +152,7 @@ class TestRequestLogMiddleware:
             503,
         )
 
-    def test_request_id_does_not_leak_to_later_lines(
-        self, client: TestClient
-    ) -> None:
+    def test_request_id_does_not_leak_to_later_lines(self, client: TestClient) -> None:
         client.get("/work", headers={"X-Request-ID": "abc"})
 
         assert request_id_var.get() is None

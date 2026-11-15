@@ -55,17 +55,19 @@ class JwksServer:
     def __init__(self) -> None:
         self.key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         jwk = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(self.key.public_key()))
-        self._body = json.dumps({"keys": [{**jwk, "kid": KID, "alg": "RS256"}]}).encode()
+        self._body = json.dumps(
+            {"keys": [{**jwk, "kid": KID, "alg": "RS256"}]}
+        ).encode()
         self.fetches = 0
         outer = self
 
         class Handler(BaseHTTPRequestHandler):
-            def do_GET(self) -> None:  # noqa: N802
+            def do_GET(self) -> None:
                 outer.fetches += 1
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(outer._body)  # noqa: SLF001
+                self.wfile.write(outer._body)
 
             def log_message(self, *_args: object) -> None:
                 """Keep the test output pristine."""
@@ -97,7 +99,11 @@ class JwksServer:
 
 
 def _call_tool(
-    client: TestClient, bearer: str, request_id: str, tool: str, arguments: dict[str, Any]
+    client: TestClient,
+    bearer: str,
+    request_id: str,
+    tool: str,
+    arguments: dict[str, Any],
 ) -> None:
     """Run initialize and one tool call, the second carrying the X-Request-ID."""
     base = {**HEADERS, "Authorization": f"Bearer {bearer}"}
@@ -164,9 +170,7 @@ class TestBrokerModeLogging:
     def test_every_line_of_a_request_carries_its_request_id(
         self, broker_client: TestClient, jwks: JwksServer, json_log: JsonLog
     ) -> None:
-        _call_tool(
-            broker_client, jwks.token(), "abc", "ami_list_xsec_databases", {}
-        )
+        _call_tool(broker_client, jwks.token(), "abc", "ami_list_xsec_databases", {})
 
         lines = [line for line in json_log.lines() if line.get("request_id") == "abc"]
         assert {"tool.call", "http.request"} <= {line["event"] for line in lines}
@@ -202,9 +206,7 @@ class TestBrokerModeLogging:
     ) -> None:
         xsec_dir.rmdir()
 
-        _call_tool(
-            broker_client, jwks.token(), "abc", "ami_list_xsec_databases", {}
-        )
+        _call_tool(broker_client, jwks.token(), "abc", "ami_list_xsec_databases", {})
 
         (call,) = [line for line in json_log.lines() if line["event"] == "tool.call"]
         assert call["outcome"] == "error"
@@ -214,9 +216,7 @@ class TestBrokerModeLogging:
     ) -> None:
         token = jwks.token()
 
-        _call_tool(
-            broker_client, token, "abc", "ami_lookup_xsec", {"dsid": 424242}
-        )
+        _call_tool(broker_client, token, "abc", "ami_lookup_xsec", {"dsid": 424242})
 
         written = json_log.stream.getvalue()
         assert token not in written
@@ -235,9 +235,7 @@ class TestBrokerModeLogging:
     ) -> None:
         broker_client.post("/mcp", json=INITIALIZE, headers=HEADERS)
 
-        access = [
-            line for line in json_log.lines() if line["event"] == "http.request"
-        ]
+        access = [line for line in json_log.lines() if line["event"] == "http.request"]
         assert [(line["path"], line["status"]) for line in access] == [("/mcp", 401)]
 
     def test_repeated_requests_fetch_the_jwks_once(
@@ -258,9 +256,7 @@ class TestSharedSecretModeLogging:
     def test_tool_call_carries_request_id_and_no_subject(
         self, shared_secret_client: TestClient, json_log: JsonLog
     ) -> None:
-        _call_tool(
-            shared_secret_client, "s3cr3t", "abc", "ami_list_xsec_databases", {}
-        )
+        _call_tool(shared_secret_client, "s3cr3t", "abc", "ami_list_xsec_databases", {})
 
         (call,) = [line for line in json_log.lines() if line["event"] == "tool.call"]
         assert call["request_id"] == "abc"
