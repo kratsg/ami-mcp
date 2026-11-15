@@ -46,17 +46,32 @@ class FieldInfo:
     description: str
 
 
+# pyAMI's Python API prefixes every Entity_Fields key with the table name
+# (``db_field.field``, ``db_field.type``, ...); only the CLI text output shows
+# them bare.
+_FIELD_KEY_PREFIX = "db_field."
+
+# AMI renders an empty column as one of these literal strings.
+_PLACEHOLDERS = frozenset({"NULL", "empty"})
+
+
+def _column(row: Any, name: str) -> str:
+    value = row.get(f"{_FIELD_KEY_PREFIX}{name}", "")
+    return "" if value in _PLACEHOLDERS else value
+
+
 def parse_entity_fields(result: Any) -> list[FieldInfo]:
-    """Parse the ``Entity_Fields`` rowset of an ``AMIGetEntityInfo`` result.
+    """Parse the ``Entity_Fields`` rowset of a ``GetEntityInfo`` result.
 
     Every row is kept: fields with ``showType=0`` are hidden in AMI's UI but
-    still queryable.
+    still queryable. The field set differs per catalog (a data catalog has no
+    ``identifier``), which is why the cache is keyed by catalog.
     """
     return [
         FieldInfo(
-            name=row["field"],
-            type=row.get("type", ""),
-            description=row.get("description", ""),
+            name=row[f"{_FIELD_KEY_PREFIX}field"],
+            type=_column(row, "type"),
+            description=_column(row, "description"),
         )
         for row in result.get_rows("Entity_Fields")
     ]
@@ -96,7 +111,7 @@ class SchemaCache:
             if (cached := self._fresh(key)) is not None:
                 return cached
             result = await run_ami_command(
-                ctx, f'AMIGetEntityInfo -catalog="{catalog}" -entity="{entity}"'
+                ctx, f'GetEntityInfo -catalog="{catalog}" -entity="{entity}"'
             )
             fields = parse_entity_fields(result)
             self._entries[key] = (self.clock(), fields)

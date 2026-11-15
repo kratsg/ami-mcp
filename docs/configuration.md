@@ -113,7 +113,7 @@ allowlisted. The built-in set is exactly the eight commands documented in the
 - `GetPhysicsParamsForDataset`
 - `DatasetWBListHashtags`
 - `DatasetWBListDatasetsForHashtag`
-- `AMIGetEntityInfo`
+- `GetEntityInfo`
 
 Extend the set per deployment with `--allow-command VERB` (repeatable, or
 comma-separated in one occurrence) or the `AMI_MCP_ALLOW_COMMANDS` env var

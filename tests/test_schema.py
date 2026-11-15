@@ -43,6 +43,30 @@ class TestParseEntityFields:
         assert {"physicsCategory", "jobConfig"} <= names
 
 
+class TestPyamiRowShape:
+    def test_fixture_rows_carry_the_db_field_prefix(
+        self, entity_info_result: Any
+    ) -> None:
+        # The live Python API prefixes every Entity_Fields key with `db_field.`.
+        row = entity_info_result.get_rows("Entity_Fields")[0]
+        assert "db_field.field" in row
+        assert "field" not in row
+
+    def test_placeholder_values_become_empty_strings(
+        self, entity_info_result: Any
+    ) -> None:
+        by_name = {f.name: f for f in parse_entity_fields(entity_info_result)}
+        assert by_name["jobConfig"].description == ""
+        assert by_name["datasetNumber"].description == "Dataset number (DSID)"
+
+    def test_data_catalog_without_identifier_parses(
+        self, data_entity_info_result: Any
+    ) -> None:
+        names = [f.name for f in parse_entity_fields(data_entity_info_result)]
+        assert "identifier" not in names
+        assert names[0] == "logicalDatasetName"
+
+
 class TestSchemaCache:
     async def test_fetches_with_get_entity_info_command(
         self, mock_ctx: MagicMock, schema_client: MagicMock
@@ -50,8 +74,7 @@ class TestSchemaCache:
         await SchemaCache().get(mock_ctx, "mc23_001:production", "dataset")
         command = schema_client.execute.call_args.args[0]
         assert (
-            command
-            == 'AMIGetEntityInfo -catalog="mc23_001:production" -entity="dataset"'
+            command == 'GetEntityInfo -catalog="mc23_001:production" -entity="dataset"'
         )
 
     async def test_second_lookup_is_served_from_cache(
@@ -71,6 +94,22 @@ class TestSchemaCache:
         await cache.get(mock_ctx, "mc20_001:production", "dataset")
         await cache.get(mock_ctx, "mc23_001:production", "files")
         assert schema_client.execute.call_count == 3
+
+    async def test_catalogs_cache_their_own_field_sets(
+        self,
+        mock_ctx: MagicMock,
+        mock_ami_client: MagicMock,
+        entity_info_result: Any,
+        data_entity_info_result: Any,
+    ) -> None:
+        mock_ami_client.execute.side_effect = lambda cmd, **_k: (
+            data_entity_info_result if "data24" in cmd else entity_info_result
+        )
+        cache = SchemaCache()
+        mc = await cache.get(mock_ctx, "mc23_001:production", "dataset")
+        data = await cache.get(mock_ctx, "data24_001:real_data", "dataset")
+        assert "identifier" in {f.name for f in mc}
+        assert "identifier" not in {f.name for f in data}
 
     async def test_entry_expires_after_ttl(
         self, mock_ctx: MagicMock, schema_client: MagicMock

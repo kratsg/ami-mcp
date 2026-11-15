@@ -1017,10 +1017,10 @@ class TestAmiListDatasetsFieldValidation:
 
     @pytest.fixture
     def router(self, mock_ami_client: MagicMock, entity_info_result: Any) -> MagicMock:
-        """Answer AMIGetEntityInfo with the schema and SearchQuery with no rows."""
+        """Answer GetEntityInfo with the schema and SearchQuery with no rows."""
 
         def execute(command: str, **_kwargs: Any) -> Any:
-            if command.startswith("AMIGetEntityInfo"):
+            if command.startswith("GetEntityInfo"):
                 return entity_info_result
             return _make_result_mock([])
 
@@ -1111,7 +1111,7 @@ class TestAmiListDatasetsFieldValidation:
         tool_text: Callable[[CallToolResult], str],
     ) -> None:
         def execute(command: str, **_kwargs: Any) -> Any:
-            if command.startswith("AMIGetEntityInfo"):
+            if command.startswith("GetEntityInfo"):
                 msg = "pyAMI exception: not allowed"
                 raise pyAMI.exception.Error(msg)
             return _make_result_mock([])

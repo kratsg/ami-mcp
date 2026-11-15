@@ -26,7 +26,7 @@ _VERBS_HARDCODED_BY_OTHER_TOOLS = frozenset(
         "AMIGetAMITagInfo",
         "GetPhysicsParamsForDataset",
         "DatasetWBListHashtags",
-        "AMIGetEntityInfo",
+        "GetEntityInfo",
     }
 )
 

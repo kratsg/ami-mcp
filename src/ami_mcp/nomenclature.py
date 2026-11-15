@@ -252,7 +252,7 @@ AMIGetAMITagInfo — get information about an AMI processing tag
   Required: -amiTag="<tag>"
   Example: -amiTag="e8351"
 
-AMIGetEntityInfo — list the fields of an entity (the valid names for SELECT)
+GetEntityInfo — list the fields of an entity (the valid names for SELECT)
   Required: -catalog="<catalog>" -entity="<entity>"
   Returns the Entity_Fields rowset: field, type, description, ...
   Note: AMI returns zero rows, not an error, for a SELECT naming an unknown
