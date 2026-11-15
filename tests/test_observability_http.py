@@ -194,7 +194,7 @@ class TestBrokerModeLogging:
         (call,) = [line for line in json_log.lines() if line["event"] == "tool.call"]
         assert call["tool"] == "ami_list_xsec_databases"
         assert call["subject"] == "kratsg"
-        assert call["outcome"] == "ok"
+        assert call["outcome"] == "success"
         assert call["duration_ms"] >= 0
         assert call["level"] == "info"
         assert call["logger"]
@@ -263,5 +263,5 @@ class TestSharedSecretModeLogging:
 
         (call,) = [line for line in json_log.lines() if line["event"] == "tool.call"]
         assert call["request_id"] == "abc"
-        assert call["outcome"] == "ok"
+        assert call["outcome"] == "success"
         assert "subject" not in call

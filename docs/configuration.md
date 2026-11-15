@@ -163,8 +163,8 @@ Over HTTP transport the server writes one JSON object per line to stdout, with
   and `duration_ms`. A successful `/healthz` probe writes none; a failing one
   does.
 - Each tool call writes one `tool.call` line with `tool`, `duration_ms` and
-  `outcome` (`ok` or `error`). In broker mode it also carries `subject`, the
-  verified token's `sub`. Tokens, tool arguments and tool results are never
+  `outcome` (`success` or `error`). In broker mode it also carries `subject`,
+  the verified token's `sub`. Tokens, tool arguments and tool results are never
   logged.
 
 Stdio transport keeps stdout for the MCP protocol and writes no log lines.
