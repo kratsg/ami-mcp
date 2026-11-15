@@ -76,11 +76,12 @@ class JwksServer:
         self.url = f"http://127.0.0.1:{self._server.server_port}"
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
 
-    def __enter__(self) -> JwksServer:
+    def start(self) -> None:
+        """Begin serving in a background thread."""
         self._thread.start()
-        return self
 
-    def __exit__(self, *_exc: object) -> None:
+    def stop(self) -> None:
+        """Stop serving and release the port."""
         self._server.shutdown()
         self._server.server_close()
 
@@ -134,8 +135,10 @@ def xsec_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 @pytest.fixture
 def jwks() -> Iterator[JwksServer]:
-    with JwksServer() as server:
-        yield server
+    server = JwksServer()
+    server.start()
+    yield server
+    server.stop()
 
 
 @pytest.fixture

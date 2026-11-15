@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture
-def client(json_log: JsonLog) -> Iterator[TestClient]:
+def client(json_log: JsonLog) -> Iterator[TestClient]:  # noqa: ARG001
     """A real Starlette app behind RequestLogMiddleware with a probe that can fail."""
     probe_status = {"code": 200}
 
@@ -79,7 +79,7 @@ class TestJsonFormatter:
 
     def test_extra_fields_are_merged(self) -> None:
         record = logging.LogRecord("n", logging.INFO, "f", 1, "evt", (), None)
-        record.fields = {"tool": "ami_execute", "duration_ms": 1.5}  # type: ignore[attr-defined]
+        record.fields = {"tool": "ami_execute", "duration_ms": 1.5}
         entry = json.loads(JsonFormatter().format(record))
 
         assert entry["tool"] == "ami_execute"
