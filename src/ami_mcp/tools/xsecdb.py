@@ -288,7 +288,7 @@ def register(mcp: MCPServer) -> None:
                             AmiXsecEntry(source=each_db.name, fields=row)
                             for row in rows
                         )
-                except Exception:  # noqa: PERF203
+                except Exception:
                     log.exception("Uncaught exception")
                     continue
             if not all_sections:

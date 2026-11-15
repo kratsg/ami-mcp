@@ -59,7 +59,7 @@ pixi add ami-mcp
 
 ## Requirements
 
-- Python 3.10 or 3.11 (pyAMI requires `<3.12`)
+- Python 3.11+
 - A valid VOMS proxy (`voms-proxy-init -voms atlas`)
 - Grid CA certificates (available on CVMFS at ATLAS sites)
 

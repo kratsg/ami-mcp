@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import mkstemp
 from unittest.mock import MagicMock, patch
@@ -30,7 +30,7 @@ def _make_ctx(headers: dict[str, str]) -> MagicMock:
 
 
 def _utc_soon() -> datetime:
-    return datetime.now(tz=timezone.utc) + timedelta(hours=1)
+    return datetime.now(tz=UTC) + timedelta(hours=1)
 
 
 class _FakeProxyClient:
@@ -48,7 +48,11 @@ class _FakeProxyClient:
         path.write_text("FAKE PEM")
         self.created_paths.append(path)
         return ProxyHandle(
-            path=path, dn="/CN=test", expires_at=_utc_soon(), nickname=None
+            path=path,
+            dn="/CN=test",
+            expires_at=_utc_soon(),
+            nickname=None,
+            voms_attributes=["/atlas/Role=NULL/Capability=NULL"],
         )
 
 
